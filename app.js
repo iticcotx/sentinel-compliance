@@ -661,9 +661,11 @@
     }
     const openable = isUrl || (!CLOUD && it.isFile);
     if (!openable) {
+      const action = READONLY ? '' : (CLOUD
+        ? '<div class="item-sub" style="margin-top:4px">Use the <b>QR code</b> button below to scan &amp; upload one — it’ll appear here.</div>'
+        : '<button class="doc-link ghost" id="dAttach">Attach document</button>');
       return '<div class="dfield"><div class="dl">Proof document</div>' +
-        '<div class="item-sub" style="margin-bottom:8px">⚠️ No proof document attached yet.</div>' +
-        (READONLY ? '' : '<button class="doc-link ghost" id="dAttach">Attach document</button>') + '</div>';
+        '<div class="item-sub" style="margin-bottom:8px">⚠️ No proof document attached yet for this item.</div>' + action + '</div>';
     }
     const fileHref = isUrl ? raw : encodePath(raw);
     const inlinePdf = /\.pdf(\?|#|$)/i.test(raw);   // local/Supabase PDFs preview inline; SharePoint viewer links don't
