@@ -1,0 +1,14 @@
+{
+  "name": "Sentinel — Compliance Command Center",
+  "short_name": "Sentinel",
+  "description": "WCGTX multi-facility healthcare compliance dashboard.",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#05222a",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
