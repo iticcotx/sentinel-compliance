@@ -259,7 +259,7 @@
     if (CLOUD && SB) {
       SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
         if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {} }, res.data.data); buildData(); }
-        SB.from("uploads").select("item_id,url").then(u => { const m = {}; (u.data || []).forEach(r => m[r.item_id] = r.url); applyUploads(m); finish(); }, finish);
+        SB.from("uploads").select("item_id,url,name").then(u => { const m = {}; (u.data || []).forEach(r => m[r.item_id] = { url: r.url, name: r.name }); applyUploads(m); finish(); }, finish);
       }, finish);
     } else if (location.protocol.indexOf("http") === 0) {
       fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); finish(); }).catch(finish);
@@ -652,27 +652,32 @@
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#drawerBack").classList.remove("show"); drawerItem = null; }
 
   function docSection(it) {
-    const isUrl = /^https?:/i.test(it.fileLink || "");
-    if (CLOUD && it.fileLink && !isUrl) {
+    const raw = it.fileLink || "";
+    const isUrl = /^https?:/i.test(raw);
+    // Cloud + a local-disk path that wasn't turned into a cloud link → can't open remotely
+    if (CLOUD && raw && !isUrl) {
       return '<div class="dfield"><div class="dl">Proof document</div>' +
-        '<div class="item-sub">📄 The original file is stored on the local system, so it can’t be opened from the cloud version. Use the <b>QR code</b> button below to scan &amp; upload a copy — that copy opens here.</div></div>';
+        '<div class="item-sub">📄 Stored on the local system — not reachable from the cloud. Use the <b>QR code</b> below to upload a copy that opens here.</div></div>';
     }
-    const fileHref = it.fileLink ? (isUrl ? it.fileLink : encodePath(it.fileLink)) : null;
-    const isPdf = it.isFile && /\.pdf(\?|$)/i.test(it.fileLink || "");
-    const fname = it.fileLink ? it.fileLink.split("/").pop() : "";
-    if (isPdf) {
+    const openable = isUrl || (!CLOUD && it.isFile);
+    if (!openable) {
       return '<div class="dfield"><div class="dl">Proof document</div>' +
-        '<div class="pdf-name">📄 ' + esc(fname) + '</div>' +
-        '<div class="pdf-frame"><div class="pdf-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">' + ICONS.doc + '</svg>If this preview stays blank, your viewer can’t embed PDFs.<br>Click “Open document” below to view it.</div>' +
-        '<iframe src="' + fileHref + '#view=FitH&toolbar=1" title="Proof document preview" loading="lazy"></iframe></div>' +
-        '<div class="doc-btns"><a class="doc-link" href="' + fileHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.doc + '</svg>Open document</a>' +
-        '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' +
-        '<button class="doc-link ghost" id="dAttach">Change document</button></div></div>';
+        '<div class="item-sub" style="margin-bottom:8px">⚠️ No proof document attached yet.</div>' +
+        (READONLY ? '' : '<button class="doc-link ghost" id="dAttach">Attach document</button>') + '</div>';
     }
+    const fileHref = isUrl ? raw : encodePath(raw);
+    const inlinePdf = /\.pdf(\?|#|$)/i.test(raw);   // local/Supabase PDFs preview inline; SharePoint viewer links don't
+    const fname = it.uploadName || (isUrl ? "" : decodeURIComponent(raw.split("/").pop()));
+    const preview = inlinePdf
+      ? '<div class="pdf-frame"><div class="pdf-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">' + ICONS.doc + '</svg>If this preview stays blank, click “Open document”.</div>' +
+        '<iframe src="' + fileHref + '#view=FitH&toolbar=1" title="Proof document preview" loading="lazy"></iframe></div>'
+      : '';
     return '<div class="dfield"><div class="dl">Proof document</div>' +
-      '<div class="item-sub" style="margin-bottom:8px">⚠️ No proof document is attached yet for this item.</div>' +
-      (fileHref ? '<a class="doc-link" href="' + fileHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.doc + '</svg>Open document</a> ' : '') +
-      '<button class="doc-link ghost" id="dAttach">Attach document</button></div>';
+      (fname ? '<div class="pdf-name">📄 ' + esc(fname) + '</div>' : '') + preview +
+      '<div class="doc-btns"><a class="doc-link" href="' + fileHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.doc + '</svg>Open document</a>' +
+      ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
+      (READONLY ? '' : '<button class="doc-link ghost" id="dAttach">Change document</button>') +
+      '</div></div>';
   }
   function wireAttach(it) {
     const b = $("#dAttach"); if (!b) return;
@@ -1223,7 +1228,15 @@
         '<div class="item-sub" style="margin-top:8px">Phone must be on the same Wi-Fi as this PC. If it won’t connect, allow Python through the Windows firewall.</div></div>');
     }).catch(() => openModal("QR code", '<div class="empty"><h3>Start the service</h3><p>Open Sentinel via <b>Start-Sentinel.bat</b> so the QR can be generated and your phone can reach the upload page.</p></div>'));
   }
-  function applyUploads(u) { if (!u) return; DATA.forEach(it => { if (u[it.id]) { it.fileLink = u[it.id]; it.isFile = /\.pdf$/i.test(u[it.id]); it.uploaded = true; } }); }
+  function applyUploads(u) {
+    if (!u) return;
+    DATA.forEach(it => {
+      const v = u[it.id]; if (!v) return;
+      const url = (typeof v === "string") ? v : v.url; if (!url) return;
+      it.fileLink = url; it.isFile = true; it.uploaded = true;
+      if (typeof v === "object" && v.name) it.uploadName = v.name;
+    });
+  }
   function handleDeepLink() {
     const m = /[#&]item=([^&]+)/.exec(location.hash); if (!m) return;
     const id = decodeURIComponent(m[1]); const it = DATA.find(x => x.id === id);
