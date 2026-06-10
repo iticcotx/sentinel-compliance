@@ -310,17 +310,7 @@
     $("#btnInsights").onclick = openInsights;
     $("#btnContacts").onclick = openContacts;
     $("#btnBell").onclick = openBell;
-    $("#auditLink").onclick = openAudit;
-    $("#gapLink").onclick = openGapReport;
-    $("#tasksLink").onclick = openTasks;
-    $("#settingsLink").onclick = openSettings;
-    $("#reportLink").onclick = fullReport;
-    $("#emailProvLink").onclick = emailProviders;
-    $("#xlsxLink").onclick = exportXlsx;
-    $("#backupLink").onclick = backup;
-    $("#restoreLink").onclick = restore;
-    $("#usersLink").onclick = openUsers;
-    if (!CURRENT_USER || CURRENT_USER.role !== "admin") { const ul = $("#usersLink"); if (ul) ul.style.display = "none"; }
+    buildFooterLinks();
     recordSnapshot();
     $("#drawerBack").onclick = closeDrawer;
     $("#securityLink").onclick = showSecurityNote;
@@ -328,6 +318,31 @@
     document.addEventListener("keydown", e => {
       if (e.key === "Escape") { closeDrawer(); closeModal(); }
       if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); }
+    });
+  }
+  function buildFooterLinks() {
+    const defs = [
+      { label: "Tasks", fn: openTasks },
+      { label: "Lead times", fn: openSettings, edit: true },
+      { label: "Full PDF report", fn: fullReport },
+      { label: "Email providers", fn: emailProviders, edit: true, localOnly: true },
+      { label: "Save to Excel", fn: exportXlsx, edit: true, localOnly: true },
+      { label: "Change log", fn: openAudit },
+      { label: "Document gaps", fn: openGapReport },
+      { label: "Backup", fn: backup },
+      { label: "Restore", fn: restore, edit: true },
+      { label: "Staff logins", fn: openUsers, admin: true }
+    ];
+    const show = defs.filter(d => {
+      if (d.admin && (!CURRENT_USER || CURRENT_USER.role !== "admin")) return false;
+      if (d.edit && READONLY) return false;
+      if (d.localOnly && CLOUD) return false;
+      return true;
+    });
+    const c = $("#footLinks"); if (!c) return; c.innerHTML = "";
+    show.forEach((d, i) => {
+      const a = el("a", "", d.label); a.style.cursor = "pointer"; a.onclick = d.fn; c.appendChild(a);
+      if (i < show.length - 1) c.appendChild(document.createTextNode(" · "));
     });
   }
   function applyTheme(t) { PREFS.theme = t; document.documentElement.setAttribute("data-theme", t); }
@@ -422,7 +437,7 @@
     const cats = [...new Set(tabItems(state.tab).map(i => i.category))].sort();
     tb.innerHTML =
       '<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' +
-      '<input id="q" type="search" name="sentinel-filter-x" autocomplete="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" placeholder="Search ' + state.tab + '…" value="' + esc(state.search) + '"></div>' +
+      '<input id="q" type="search" name="sf-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Search ' + state.tab + '…" value="' + esc(state.search) + '"></div>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
       (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
       (state.tab === "provider" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
@@ -431,6 +446,7 @@
         ['list', 'timeline', 'calendar'].map(v => '<button data-v="' + v + '" class="' + (state.view === v ? "on" : "") + '">' + v.charAt(0).toUpperCase() + v.slice(1) + '</button>').join("") +
       '</div>' +
       '<button class="icon-btn" id="addBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add item</button>';
+    $("#q").addEventListener("focus", function () { this.removeAttribute("readonly"); }, { once: true });
     $("#q").oninput = e => { state.search = e.target.value; renderContent(); };
     $("#catF").onchange = e => { state.category = e.target.value; renderContent(); };
     if ($("#facF")) $("#facF").onchange = e => { state.facility = e.target.value; renderContent(); };
@@ -636,7 +652,12 @@
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#drawerBack").classList.remove("show"); drawerItem = null; }
 
   function docSection(it) {
-    const fileHref = it.fileLink ? (/^https?:/i.test(it.fileLink) ? it.fileLink : encodePath(it.fileLink)) : null;
+    const isUrl = /^https?:/i.test(it.fileLink || "");
+    if (CLOUD && it.fileLink && !isUrl) {
+      return '<div class="dfield"><div class="dl">Proof document</div>' +
+        '<div class="item-sub">📄 The original file is stored on the local system, so it can’t be opened from the cloud version. Use the <b>QR code</b> button below to scan &amp; upload a copy — that copy opens here.</div></div>';
+    }
+    const fileHref = it.fileLink ? (isUrl ? it.fileLink : encodePath(it.fileLink)) : null;
     const isPdf = it.isFile && /\.pdf(\?|$)/i.test(it.fileLink || "");
     const fname = it.fileLink ? it.fileLink.split("/").pop() : "";
     if (isPdf) {
@@ -952,9 +973,9 @@
   function openPalette() {
     const m = $("#modal");
     $("#modalInner").className = "modal palette";
-    $("#modalInner").innerHTML = '<input id="palIn" type="search" name="sentinel-ask-x" autocomplete="off" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" placeholder="Ask: what expires in March? · who has no DEA? · expired licenses · next 30 days"><div class="results" id="palRes"></div>';
+    $("#modalInner").innerHTML = '<input id="palIn" type="search" name="ask-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Ask: what expires in March? · who has no DEA? · expired licenses · next 30 days"><div class="results" id="palRes"></div>';
     m.classList.add("show");
-    const inp = $("#palIn"); inp.focus();
+    const inp = $("#palIn"); setTimeout(() => { inp.removeAttribute("readonly"); inp.focus(); }, 60);
     let sel = 0, list = [];
     function draw() {
       if (!list.length) { $("#palRes").innerHTML = '<div class="pal-empty">' + (inp.value.trim() ? "No matches." : "Type to search across all tabs…") + '</div>'; return; }
