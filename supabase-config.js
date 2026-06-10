@@ -4,7 +4,7 @@
    The anon/public key is meant to be used in the browser and is safe to commit.
    ========================================================================== */
 window.SUPA = {
-  url:    "",          // e.g. https://abcdefgh.supabase.co
-  anon:   "",          // the "anon public" API key
-  bucket: "uploads"    // Storage bucket name (create it in Supabase Storage)
+  url:    "https://jwbheesuuiogrnpseeqz.supabase.co",
+  anon:   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3YmhlZXN1dWlvZ3JucHNlZXF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDE4MzYsImV4cCI6MjA5NjY3NzgzNn0.WvkVk_2WSeA2zMWaprK6cCYa1Q5oqABSdtJy0FYWSGY",
+  bucket: "uploads"
 };
