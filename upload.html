@@ -13,6 +13,7 @@
   input[type=file]{width:100%;color:#e9eef3;font-size:14px;background:rgba(255,255,255,.06);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.12)}
   button{margin-top:18px;width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;font-weight:700;font-size:15px}
   button:disabled{opacity:.5}.msg{margin-top:16px;font-size:14px;font-weight:600;min-height:20px}
+  .bar{height:6px;background:rgba(255,255,255,.1);border-radius:6px;margin-top:14px;overflow:hidden;display:none}.bar>i{display:block;height:100%;width:0;background:linear-gradient(135deg,#14b8a6,#5eead4);transition:width .2s}
 </style></head>
 <body>
   <div class="card">
@@ -21,34 +22,62 @@
     <div class="meta" id="meta">Loading…</div>
     <label>Choose a file or take a photo of the document</label>
     <input type="file" id="file" accept="application/pdf,image/*" capture="environment">
-    <button id="go">Upload</button>
+    <div class="bar" id="bar"><i id="barfill"></i></div>
+    <button id="go">Upload to OneDrive</button>
     <div class="msg" id="msg"></div>
   </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js"></script>
 <script src="data.js"></script>
 <script>
   var q = new URLSearchParams(location.search), id = q.get("item");
   var items = (window.SENTINEL_SEED && window.SENTINEL_SEED.items) || [];
-  var it = items.filter(function(x){return x.id===id;})[0];
-  document.getElementById("meta").innerHTML = it ? ("<b>"+it.category+"</b><br>"+it.entity) : ("Item: "+(id||"(none)"));
-  var SB = (window.SUPA && window.SUPA.url) ? supabase.createClient(window.SUPA.url, window.SUPA.anon) : null;
+  var it = items.filter(function(x){ return x.id === id; })[0];
+  document.getElementById("meta").innerHTML = it
+    ? ("<b>" + it.category + "</b><br>" + it.entity)
+    : ("Item: " + (id || "(none)"));
+
+  function setMsg(t, c){ var m = document.getElementById("msg"); m.style.color = c || "#9fd9d0"; m.textContent = t; }
+  function setBar(p){ var b = document.getElementById("bar"); b.style.display = p == null ? "none" : "block"; document.getElementById("barfill").style.width = (p||0) + "%"; }
+
   document.getElementById("go").onclick = async function(){
-    var f = document.getElementById("file").files[0], m = document.getElementById("msg"), b = document.getElementById("go");
-    if(!f){ m.style.color="#fca5a5"; m.textContent="Please choose a file first."; return; }
-    if(!SB){ m.style.color="#fca5a5"; m.textContent="Cloud not configured (supabase-config.js)."; return; }
-    m.style.color="#9fd9d0"; m.textContent="Uploading…"; b.disabled=true;
+    var f = document.getElementById("file").files[0], b = document.getElementById("go");
+    if (!f) { setMsg("Please choose a file first.", "#fca5a5"); return; }
+    if (!it) { setMsg("This item couldn't be found.", "#fca5a5"); return; }
+    var folder = it.folderLink || it.fileLink || "";   // the provider/facility folder on OneDrive
+    b.disabled = true; setMsg("Preparing…"); setBar(5);
     try {
-      var safe = f.name.replace(/[^A-Za-z0-9._-]/g,"_");
-      var path = id + "/" + Date.now() + "_" + safe;
-      var up = await SB.storage.from(window.SUPA.bucket).upload(path, f, { upsert:true, contentType:f.type||"application/octet-stream" });
-      if(up.error) throw up.error;
-      var url = SB.storage.from(window.SUPA.bucket).getPublicUrl(path).data.publicUrl;
-      var ins = await SB.from("uploads").upsert({ item_id:id, url:url, name:f.name });
-      if(ins.error) throw ins.error;
-      m.style.color="#6ee7b7"; m.textContent="✓ Uploaded. It now shows in Sentinel for this item.";
-      b.disabled=false;
-    } catch(e){ m.style.color="#fca5a5"; m.textContent="Failed: " + (e.message||e); b.disabled=false; }
+      // 1) Ask our server to open an upload slot in the right OneDrive folder.
+      var r1 = await fetch("/api/upload-start?folder=" + encodeURIComponent(folder) + "&name=" + encodeURIComponent(f.name));
+      var s = await r1.json();
+      if (!s.ok) throw new Error(s.message || "could not start upload");
+
+      // 2) Send the file straight to OneDrive (bypasses our server's size limit).
+      setMsg("Uploading to OneDrive…"); setBar(15);
+      var put = await new Promise(function(resolve, reject){
+        var xhr = new XMLHttpRequest();
+        xhr.open("PUT", s.uploadUrl, true);
+        xhr.setRequestHeader("Content-Range", "bytes 0-" + (f.size - 1) + "/" + f.size);
+        xhr.upload.onprogress = function(e){ if (e.lengthComputable) setBar(15 + Math.round(e.loaded / e.total * 80)); };
+        xhr.onload = function(){ (xhr.status >= 200 && xhr.status < 300) ? resolve(JSON.parse(xhr.responseText || "{}")) : reject(new Error("upload HTTP " + xhr.status)); };
+        xhr.onerror = function(){ reject(new Error("network error during upload")); };
+        xhr.send(f);
+      });
+      setBar(98);
+
+      // 3) Record item -> file link so it shows in Sentinel.
+      var webUrl = put.webUrl || "";
+      await fetch("/api/uploads-map", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: id, url: webUrl, name: f.name })
+      }).catch(function(){});
+
+      setBar(100);
+      setMsg("✓ Saved to OneDrive. It now shows in Sentinel for this item.", "#6ee7b7");
+      b.disabled = false;
+    } catch (e) {
+      setBar(null);
+      setMsg("Failed: " + (e.message || e), "#fca5a5");
+      b.disabled = false;
+    }
   };
 </script>
 </body></html>
