@@ -654,8 +654,9 @@
   function docSection(it) {
     const raw = it.fileLink || "";
     const isUrl = /^https?:/i.test(raw);
-    // Cloud + a local-disk path that wasn't turned into a cloud link → can't open remotely
-    if (CLOUD && raw && !isUrl) {
+    // Cloud + a MATCHED proof file on local disk that wasn't turned into a cloud link → can't open remotely.
+    // (No-proof items also carry a local folder-fallback path, so gate on it.isFile or they'd wrongly show this.)
+    if (CLOUD && raw && !isUrl && it.isFile) {
       return '<div class="dfield"><div class="dl">Proof document</div>' +
         '<div class="item-sub">📄 Stored on the local system — not reachable from the cloud. Use the <b>QR code</b> below to upload a copy that opens here.</div></div>';
     }
