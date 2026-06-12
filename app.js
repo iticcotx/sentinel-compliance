@@ -642,6 +642,16 @@
   // ================= DRAWER =================
   let drawerItem = null;
   function encodePath(p) { return p.split("/").map(s => s === ".." || s === "." ? s : encodeURIComponent(s)).join("/"); }
+  // Turn a matched local-disk proof path ("../..WCGTX Master Physician File/.../x.pdf")
+  // into its SharePoint web link, so it opens from any computer in the cloud.
+  function sharePointLink(localRaw) {
+    const HOST = "https://wcgtx-my.sharepoint.com", PERS = "/personal/sfarooqui_wcgtx_com";
+    const DOC = PERS + "/Documents/WCGTX Phyicians_04.08.2020/";
+    const rel = String(localRaw).replace(/^(\.\.\/)+/, "");
+    const server = DOC + rel;
+    const parent = server.slice(0, server.lastIndexOf("/"));
+    return HOST + PERS + "/_layouts/15/onedrive.aspx?id=" + encodeURIComponent(server) + "&parent=" + encodeURIComponent(parent);
+  }
 
   function openDrawer(it, isNew) {
     drawerItem = it;
@@ -652,14 +662,13 @@
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#drawerBack").classList.remove("show"); drawerItem = null; }
 
   function docSection(it) {
-    const raw = it.fileLink || "";
-    const isUrl = /^https?:/i.test(raw);
-    // Cloud + a MATCHED proof file on local disk that wasn't turned into a cloud link → can't open remotely.
-    // (No-proof items also carry a local folder-fallback path, so gate on it.isFile or they'd wrongly show this.)
-    if (CLOUD && raw && !isUrl && it.isFile) {
-      return '<div class="dfield"><div class="dl">Proof document</div>' +
-        '<div class="item-sub">📄 Stored on the local system — not reachable from the cloud. Use the <b>QR code</b> below to upload a copy that opens here.</div></div>';
+    let raw = it.fileLink || "";
+    // Cloud: a MATCHED proof still pointing at a local-disk path → build its SharePoint
+    // web link so it opens from anywhere (instead of the old dead-end "stored locally" note).
+    if (CLOUD && it.isFile && raw.indexOf("../") === 0 && !/^https?:/i.test(raw)) {
+      raw = sharePointLink(raw);
     }
+    const isUrl = /^https?:/i.test(raw);
     const openable = isUrl || (!CLOUD && it.isFile);
     if (!openable) {
       const action = READONLY ? '' : (CLOUD
