@@ -726,11 +726,12 @@
       '<div class="dfield"><div class="dl">Renewal log</div><div id="logList">' + (logs.length ? logs.map(L => '<div class="log-entry">' + esc(L.text) + ' <small>— ' + L.date + '</small></div>').join("") : '<div class="item-sub">No log entries yet.</div>') + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:8px"><input id="logIn" placeholder="Add a renewal note…" style="flex:1;padding:9px 11px;border-radius:9px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)"><button class="icon-btn" id="logAdd">Add</button></div></div>' +
       '</div>' +
-      '<div class="drawer-actions">' + (READONLY ? "" : '<button id="dRenew" class="save">✓ Mark renewed</button><button id="dEdit">Edit</button>') + '<button id="dWatch">' + (isWatched(it.id) ? "★ Watching" : "☆ Watch") + '</button><button id="dIcs">Calendar (.ics)</button><button id="dQR">QR code</button>' + (READONLY ? "" : '<button id="dDel" class="del">Delete</button>') + '</div>';
+      '<div class="drawer-actions">' + (READONLY ? "" : '<button id="dRenew" class="save">✓ Mark renewed</button><button id="dEdit">Edit</button>') + '<button id="dWatch">' + (isWatched(it.id) ? "★ Watching" : "☆ Watch") + '</button><button id="dIcs">Calendar (.ics)</button><button id="dQR">QR code</button><button id="dEmail">✉️ Email</button>' + (READONLY ? "" : '<button id="dDel" class="del">Delete</button>') + '</div>';
     $("#dClose").onclick = closeDrawer;
     if ($("#dEdit")) $("#dEdit").onclick = () => renderDrawerEdit(it, false);
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
     $("#dIcs").onclick = () => exportICS(it);
+    if ($("#dEmail")) $("#dEmail").onclick = () => openEmailTemplate(it);
     $("#dWatch").onclick = () => { toggleWatch(it.id); renderDrawerView(it); render(); };
     if ($("#dRenew")) $("#dRenew").onclick = () => markRenewed(it);
     if ($("#tSave")) $("#tSave").onclick = () => {
@@ -855,6 +856,94 @@
         .then(r => r.json())
         .then(d => toast(d.ok ? ("✓ Emailed report (" + sel.join(", ") + ")") : ("Send failed: " + (d.message || "").slice(-120))))
         .catch(() => toast(CLOUD ? "Email function error — check Vercel env vars." : "Email service not running — open via Start-Sentinel.bat, then try again."));
+    };
+  }
+
+  // ================= TEMPLATED PROVIDER EMAILS =================
+  // Built from Cynthia's Word templates. Blanks auto-fill from the item; user can edit.
+  // TEST MODE: the server sends to imadaijaz2000@gmail.com only (not real providers yet).
+  const SIG_CRED = "\nThank You,\nCynthia Wray\nCredentialing Specialist\ncredentialing@wcgtx.com\n21175 Tomball Parkway #504  Houston, TX 77070   Ph# 346-226-6811 ext 1001";
+  const SIG_ICCT = "\nThank you,\nCynthia Wray\nCredentialing Specialist\nImmediate Care Centers of Texas\ncwray@wcgtx.com";
+  function greetingNow() { const h = new Date().getHours(); return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; }
+  function lastNameOf(entity) { const p = String(entity || "").replace(/[*]/g, "").trim().split(/\s+/); return p[p.length - 1] || ""; }
+
+  const EMAIL_TEMPLATES = {
+    reminder: {
+      label: "Reminder — credential expiring",
+      fields: [["greeting", "Greeting (morning/afternoon)"], ["drname", "Dr. (last name)"], ["credential", "Credential"], ["date", "Expiry date"]],
+      fill: it => ({ greeting: greetingNow(), drname: lastNameOf(it.entity), credential: it.category || "", date: it.expires ? fmtD(it.expires) : "" }),
+      subj: v => "Reminder: your " + v.credential + " expires on " + v.date,
+      body: v => "Good " + v.greeting + " Dr. " + v.drname + ".  This is a reminder that your " + v.credential + " expires on " + v.date + ".  When you renew, please send a copy of your new certificate so we can update your credentialing file.\n" + SIG_CRED
+    },
+    thankyou: {
+      label: "Thank you — renewal received",
+      fields: [["credential", "Credential renewed"]],
+      fill: it => ({ credential: it.category || "" }),
+      subj: v => "Received: your renewed " + v.credential,
+      body: v => "Thank you for sending a copy of your renewed " + v.credential + ".  Your credentialing file has been updated.\n" + SIG_CRED
+    },
+    onboard_phys: {
+      label: "Onboarding — Physician",
+      fields: [["greeting", "Greeting (morning/afternoon)"], ["drname", "Dr. (last name)"]],
+      fill: it => ({ greeting: greetingNow(), drname: lastNameOf(it.entity) }),
+      subj: () => "Welcome to WCGTX — credentialing onboarding",
+      body: v => "Good " + v.greeting + " Dr. " + v.drname + " and welcome to WCGTX.  You will be receiving an email from PandaDoc with your Initial Application & Peer Reference Contact Info Form to complete.  Please send current copies of the following documents to begin your credentialing file:\n\n-CV/Resume\n-Texas Medical License Certificate\n-DEA Certificate\n-Certifications (including ACLS, ATLS, PALS, BLS)\n-Board Certification Letter (if applicable)\n-Driver License\n-Social Security Card\n-Diploma and/or ECFMG\n-Residency\n-Recent Flu Documentation\n-Recent TB Skin Test\n-CME (past 2 years, at least 20 hours)\n-TSCA (signed within 90 days or a fillable one has been attached for your convenience)\n" + SIG_CRED
+    },
+    onboard_rn: {
+      label: "Onboarding — RN",
+      fields: [["name", "Name"], ["facility", "Facility (ER)"], ["shift", "Shift"]],
+      fill: it => ({ name: String(it.entity || "").replace(/[*]/g, "").trim(), facility: "", shift: "" }),
+      subj: v => "Welcome to " + (v.facility || "") + " ER",
+      body: v => "Good afternoon " + v.name + " and welcome to " + v.facility + " ER as " + v.shift + " shift.  You will be receiving an email from Paycor to register, complete Initial Application, and upload these required documents:\n\n-Resume\n-RN License\n-Driver License\n-Social Security Card\n-ACLS certificate\n-PALS certificate\n-BLS certificate\n-copy of Diploma (education)\n-recent Flu documentation\n-complete TB Questionnaire\n\nAfter you complete your Paycor registration, we will run a background check.  You will also receive an offer letter and employee handbook through PandaDoc to review and sign.  Please let us know if you have any questions.\n" + SIG_ICCT
+    },
+    onboard_fd: {
+      label: "Onboarding — Front Desk",
+      fields: [["name", "Name"], ["facility", "Facility (ER)"], ["shift", "Shift"]],
+      fill: it => ({ name: String(it.entity || "").replace(/[*]/g, "").trim(), facility: "", shift: "" }),
+      subj: v => "Welcome to " + (v.facility || "") + " ER",
+      body: v => "Good afternoon " + v.name + " and welcome to " + v.facility + " ER as " + v.shift + " shift.  You will be receiving an email from Paycor to register, complete Initial Application, and upload these required documents:\n\n-Resume\n-Driver License\n-Social Security Card\n-BLS certificate\n-copy of Diploma (education)\n-recent Flu documentation\n\nAfter you complete your Paycor registration, we will run a background check.  You will also receive an offer letter and employee handbook through PandaDoc to review and sign.  Please let us know if you have any questions.\n" + SIG_ICCT
+    }
+  };
+
+  function tmplToHtml(text) {
+    const lines = text.split("\n"); let out = "", ul = false;
+    for (const ln of lines) {
+      if (/^\s*-/.test(ln)) { if (!ul) { out += '<ul style="margin:6px 0;padding-left:20px">'; ul = true; } out += "<li>" + esc(ln.replace(/^\s*-\s*/, "")) + "</li>"; }
+      else { if (ul) { out += "</ul>"; ul = false; } out += ln.trim() === "" ? '<div style="height:10px"></div>' : "<div>" + esc(ln) + "</div>"; }
+    }
+    if (ul) out += "</ul>";
+    return '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#0f172a;line-height:1.55">' + out + '</div>';
+  }
+
+  function openEmailTemplate(it) {
+    let cur = "reminder";
+    const ip = "width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)";
+    const opts = Object.keys(EMAIL_TEMPLATES).map(k => '<option value="' + k + '">' + EMAIL_TEMPLATES[k].label + '</option>').join("");
+    openModal("Email this provider (from template)",
+      '<div class="item-sub" style="margin-bottom:10px">🧪 Test mode — sends only to <b>imadaijaz2000@gmail.com</b>.</div>' +
+      '<div class="dl">Template</div><select id="etSel" style="' + ip + ';margin-bottom:10px">' + opts + '</select>' +
+      '<div id="etFields"></div>' +
+      '<div class="dl" style="margin-top:8px">Preview</div><div id="etPrev" style="border:1px solid var(--hair);border-radius:10px;padding:12px;background:#fff;max-height:300px;overflow:auto"></div>' +
+      '<div class="drawer-actions" style="border:none;padding:10px 0 0"><button class="save" id="etSend">Send test email</button></div>');
+    const vals = () => { const o = {}; [...$("#modalInner").querySelectorAll(".etf")].forEach(i => o[i.dataset.k] = i.value); return o; };
+    const refreshPrev = () => { $("#etPrev").innerHTML = tmplToHtml(EMAIL_TEMPLATES[cur].body(vals())); };
+    const drawFields = () => {
+      const t = EMAIL_TEMPLATES[cur], v = t.fill(it);
+      $("#etFields").innerHTML = t.fields.map(([k, lab]) => '<div style="margin-bottom:8px"><div class="dl">' + lab + '</div><input class="etf" data-k="' + k + '" value="' + esc(v[k] || "") + '" style="' + ip + '"></div>').join("");
+      [...$("#modalInner").querySelectorAll(".etf")].forEach(i => i.oninput = refreshPrev);
+      refreshPrev();
+    };
+    $("#etSel").onchange = e => { cur = e.target.value; drawFields(); };
+    drawFields();
+    $("#etSend").onclick = () => {
+      const t = EMAIL_TEMPLATES[cur], v = vals();
+      const payload = { subject: t.subj(v), html: tmplToHtml(t.body(v)), text: t.body(v) };
+      closeModal(); toast("Sending test email…");
+      const endpoint = CLOUD ? "/api/send-template" : "http://localhost:8765/api/send-template";
+      fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+        .then(r => r.json())
+        .then(d => toast(d.ok ? ("✓ Test email sent to " + d.to) : ("Send failed: " + (d.message || "").slice(-120))))
+        .catch(() => toast(CLOUD ? "Email function error — check Vercel env vars." : "Run via Start-Sentinel.bat to send locally."));
     };
   }
 
