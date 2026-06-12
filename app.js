@@ -915,18 +915,29 @@
     return '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#0f172a;line-height:1.55">' + out + '</div>';
   }
 
+  // A scan-to-upload QR block appended to every templated email.
+  function uploadQrBlock(it) {
+    const origin = (CLOUD ? location.origin : "https://sentinel-compliance-kappa.vercel.app");
+    const url = origin + "/upload.html?item=" + encodeURIComponent(it.id);
+    const qr = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(url);
+    return '<div style="margin-top:18px;padding-top:14px;border-top:1px solid #e6ebf1;text-align:center;font-family:Segoe UI,Arial,sans-serif">' +
+      '<div style="font-size:13px;color:#0f172a;margin-bottom:8px">📲 Scan this code to upload your document right from your phone:</div>' +
+      '<img src="' + qr + '" alt="Upload QR code" width="180" height="180" style="border:1px solid #e6ebf1;border-radius:10px;padding:6px;background:#fff">' +
+      '<div style="font-size:12px;color:#64748b;margin-top:6px">or open: <a href="' + url + '">' + url + '</a></div></div>';
+  }
+
   function openEmailTemplate(it) {
     let cur = "reminder";
     const ip = "width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)";
     const opts = Object.keys(EMAIL_TEMPLATES).map(k => '<option value="' + k + '">' + EMAIL_TEMPLATES[k].label + '</option>').join("");
     openModal("Email this provider (from template)",
-      '<div class="item-sub" style="margin-bottom:10px">🧪 Test mode — sends only to <b>imadaijaz2000@gmail.com</b>.</div>' +
+      '<div class="item-sub" style="margin-bottom:10px">Pick a template — the blanks fill from this provider, and a scan-to-upload QR is added automatically.</div>' +
       '<div class="dl">Template</div><select id="etSel" style="' + ip + ';margin-bottom:10px">' + opts + '</select>' +
       '<div id="etFields"></div>' +
       '<div class="dl" style="margin-top:8px">Preview</div><div id="etPrev" style="border:1px solid var(--hair);border-radius:10px;padding:12px;background:#fff;max-height:300px;overflow:auto"></div>' +
       '<div class="drawer-actions" style="border:none;padding:10px 0 0"><button class="save" id="etSend">Send test email</button></div>');
     const vals = () => { const o = {}; [...$("#modalInner").querySelectorAll(".etf")].forEach(i => o[i.dataset.k] = i.value); return o; };
-    const refreshPrev = () => { $("#etPrev").innerHTML = tmplToHtml(EMAIL_TEMPLATES[cur].body(vals())); };
+    const refreshPrev = () => { $("#etPrev").innerHTML = tmplToHtml(EMAIL_TEMPLATES[cur].body(vals())) + uploadQrBlock(it); };
     const drawFields = () => {
       const t = EMAIL_TEMPLATES[cur], v = t.fill(it);
       $("#etFields").innerHTML = t.fields.map(([k, lab]) => '<div style="margin-bottom:8px"><div class="dl">' + lab + '</div><input class="etf" data-k="' + k + '" value="' + esc(v[k] || "") + '" style="' + ip + '"></div>').join("");
@@ -937,12 +948,13 @@
     drawFields();
     $("#etSend").onclick = () => {
       const t = EMAIL_TEMPLATES[cur], v = vals();
-      const payload = { subject: t.subj(v), html: tmplToHtml(t.body(v)), text: t.body(v) };
-      closeModal(); toast("Sending test email…");
+      const upUrl = (CLOUD ? location.origin : "https://sentinel-compliance-kappa.vercel.app") + "/upload.html?item=" + encodeURIComponent(it.id);
+      const payload = { subject: t.subj(v), html: tmplToHtml(t.body(v)) + uploadQrBlock(it), text: t.body(v) + "\n\nUpload your document here: " + upUrl };
+      closeModal(); toast("Sending email…");
       const endpoint = CLOUD ? "/api/send-template" : "http://localhost:8765/api/send-template";
       fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         .then(r => r.json())
-        .then(d => toast(d.ok ? ("✓ Test email sent to " + d.to) : ("Send failed: " + (d.message || "").slice(-120))))
+        .then(d => toast(d.ok ? ("✓ Email sent to " + d.to) : ("Send failed: " + (d.message || "").slice(-120))))
         .catch(() => toast(CLOUD ? "Email function error — check Vercel env vars." : "Run via Start-Sentinel.bat to send locally."));
     };
   }

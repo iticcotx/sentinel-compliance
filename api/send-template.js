@@ -20,14 +20,11 @@ module.exports = async (req, res) => {
   if (!user || !pass) { res.status(200).json({ ok: false, message: "Set GMAIL_USER and GMAIL_APP_PASSWORD in Vercel env vars." }); return; }
   if (!html && !text) { res.status(200).json({ ok: false, message: "empty email body" }); return; }
 
-  const wrapped = '<div style="max-width:680px;margin:auto">' +
-    '<div style="background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;padding:14px 20px;border-radius:12px 12px 0 0;font:600 13px Segoe UI,Arial,sans-serif;letter-spacing:1.5px">SENTINEL · WCGTX CREDENTIALING &nbsp;—&nbsp; TEST</div>' +
-    '<div style="border:1px solid #e6ebf1;border-top:none;border-radius:0 0 12px 12px;padding:20px 22px">' + html +
-    '<p style="color:#94a3b8;font-size:11px;margin-top:20px">🧪 Test send — in production this would go to the provider. Sent by Sentinel.</p></div></div>';
+  const wrapped = '<div style="max-width:680px;margin:auto;border:1px solid #e6ebf1;border-radius:12px;padding:22px 24px">' + html + '</div>';
 
   try {
     const t = nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
-    await t.sendMail({ from: user, to, subject: "[TEST] " + subject, html: wrapped, text });
+    await t.sendMail({ from: user, to, subject, html: wrapped, text });
     res.status(200).json({ ok: true, to });
   } catch (e) {
     res.status(200).json({ ok: false, message: String(e.message || e) });
