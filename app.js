@@ -61,9 +61,9 @@
     return null;
   }
   let DATA = [];                   // merged item list
-  let OVERLAY = loadJSON(OVERLAY_KEY, { edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {} });
+  let OVERLAY = loadJSON(OVERLAY_KEY, { edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} });
   ["watch", "audit"].forEach(k => { if (!OVERLAY[k]) OVERLAY[k] = []; });
-  ["leads", "tasks", "snapshots", "logs", "edits"].forEach(k => { if (!OVERLAY[k]) OVERLAY[k] = {}; });
+  ["leads", "tasks", "snapshots", "logs", "edits", "verified"].forEach(k => { if (!OVERLAY[k]) OVERLAY[k] = {}; });
   let PREFS = loadJSON(PREF_KEY, { theme: "light" });
   let UNLOCKED = loadSession();
   const state = { tab: "provider", view: "list", search: "", status: "", category: "", facility: "all", showInactive: false, openGroups: {}, quickView: "", selectMode: false, selection: new Set() };
@@ -258,7 +258,7 @@
     const finish = () => { render(); handleDeepLink(); };
     if (CLOUD && SB) {
       SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
-        if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {} }, res.data.data); buildData(); }
+        if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, res.data.data); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); }
         pullCloudUploads(finish);
       }, () => pullCloudUploads(finish));
     } else if (CLOUD) {
@@ -624,11 +624,13 @@
     const proofBadge = it.isFile
       ? '<span class="proof-badge has" title="Proof document attached">📄 Proof</span>'
       : (it.isFile === false ? '<span class="proof-badge no" title="No proof document attached — click to attach">⚠ No proof</span>' : "");
+    const ver = OVERLAY.verified[it.id];
+    const verBadge = ver ? '<span class="proof-badge has" title="Reviewed by ' + esc(ver.by || "") + ' on ' + esc(ver.at || "") + '" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">✅ Verified</span>' : "";
     row.innerHTML =
       (state.selectMode ? '<input type="checkbox" class="row-check"' + (state.selection.has(it.id) ? " checked" : "") + '>' : "") +
       '<div class="ico s-' + st.key + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' +
       '<div class="main"><div class="item-cat">' + esc(it.category) + '</div><div class="item-sub">' + esc(sub || it.notes || "") + '</div></div>' +
-      proofBadge +
+      verBadge + proofBadge +
       '<div class="item-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + (st.startBy && st.key !== "good" && st.key !== "permanent" ? '<small>renew by ' + fmtD(st.startBy.toISOString().slice(0, 10)) + '</small>' : "") + '</div>' +
       '<div class="countdown s-' + st.key + '" style="background:none;border:none;padding:0">' + countdownText(st) + '</div>' +
       '<div class="status-badge s-' + st.key + '">' + st.label + '</div>' +
@@ -726,6 +728,7 @@
     const st = computeStatus(it);
     const logs = (OVERLAY.logs[it.id] || []);
     const task = OVERLAY.tasks[it.id] || {};
+    const ver = OVERLAY.verified[it.id];
     const statusOpt = s => '<option' + ((task.status || "none") === s ? " selected" : "") + '>' + s + '</option>';
     const f = (l, v) => '<div class="dfield"><div class="dl">' + l + '</div><div class="dv">' + v + '</div></div>';
     $("#drawer").innerHTML =
@@ -748,6 +751,10 @@
       '<input id="tDue" type="date" value="' + esc(task.due || "") + '" style="padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)">' +
       '<select id="tStatus" style="padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)">' + ["none", "To-do", "In progress", "Done"].map(statusOpt).join("") + '</select>' +
       '<button class="icon-btn" id="tSave">Save</button></div></div>' +
+      '<div class="dfield"><div class="dl">Review</div>' +
+      (ver ? '<div class="item-sub" style="margin-bottom:8px">✅ Verified by <b>' + esc(ver.by || "") + '</b> on ' + esc(ver.at || "") + '</div>' : '<div class="item-sub" style="margin-bottom:8px">Not yet reviewed.</div>') +
+      (READONLY ? '' : '<div style="display:flex;gap:6px"><button class="icon-btn" id="vMark">' + (ver ? "Re-verify (today)" : "✓ Mark verified") + '</button>' + (ver ? '<button class="icon-btn" id="vClear">Clear</button>' : '') + '</div>') +
+      '</div>' +
       '<div class="dfield"><div class="dl">Renewal log</div><div id="logList">' + (logs.length ? logs.map(L => '<div class="log-entry">' + esc(L.text) + ' <small>— ' + L.date + '</small></div>').join("") : '<div class="item-sub">No log entries yet.</div>') + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:8px"><input id="logIn" placeholder="Add a renewal note…" style="flex:1;padding:9px 11px;border-radius:9px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)"><button class="icon-btn" id="logAdd">Add</button></div></div>' +
       '</div>' +
@@ -765,6 +772,8 @@
       else { if (t.status === "none") t.status = "To-do"; OVERLAY.tasks[it.id] = t; }
       saveOverlay(); render(); toast("Task saved.");
     };
+    if ($("#vMark")) $("#vMark").onclick = () => { OVERLAY.verified[it.id] = { by: (CURRENT_USER && CURRENT_USER.label) || "Admin", at: new Date().toISOString().slice(0, 10) }; logAudit("verify", it, "marked reviewed/verified"); saveOverlay(); renderDrawerView(it); render(); toast("Marked verified."); };
+    if ($("#vClear")) $("#vClear").onclick = () => { delete OVERLAY.verified[it.id]; saveOverlay(); renderDrawerView(it); render(); toast("Verification cleared."); };
     wireAttach(it);
     $("#logAdd").onclick = () => { const v = $("#logIn").value.trim(); if (!v) return; OVERLAY.logs[it.id] = (OVERLAY.logs[it.id] || []); OVERLAY.logs[it.id].push({ text: v, date: new Date().toISOString().slice(0, 10) }); saveOverlay(); renderDrawerView(it); };
     if (READONLY) {
