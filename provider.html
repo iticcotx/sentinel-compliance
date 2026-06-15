@@ -26,16 +26,17 @@
   <div class="sub" id="summary"></div>
   <div id="list"></div>
 </div>
-<script src="data.js"></script>
 <script>
   var q=new URLSearchParams(location.search), ekey=q.get("e");
-  var items=((window.SENTINEL_SEED&&window.SENTINEL_SEED.items)||[]).filter(function(x){return x.entityKey===ekey;});
+  var items=[];
   var who=document.getElementById("who"), list=document.getElementById("list");
   if(!ekey){ who.textContent="Welcome"; document.getElementById("summary").textContent="Please open the personal QR code or link your coordinator sent you — it knows which documents are yours."; }
-  else if(!items.length){ who.textContent="Link not recognized"; document.getElementById("summary").textContent="This link doesn’t match a provider on file. Please ask your coordinator for an updated link."; }
   else {
-    who.textContent=items[0].entity;
-    fetch("/api/uploads-map").then(function(r){return r.json();}).then(render).catch(function(){render({});});
+    fetch("/api/provider?e="+encodeURIComponent(ekey)).then(function(r){return r.json();}).then(function(p){
+      if(!p.items||!p.items.length){ who.textContent="Link not recognized"; document.getElementById("summary").textContent="This link doesn’t match a provider on file. Please ask your coordinator for an updated link."; return; }
+      items=p.items; who.textContent=p.entity||items[0].entity;
+      return fetch("/api/uploads-map").then(function(r){return r.json();}).then(render).catch(function(){render({});});
+    }).catch(function(){ who.textContent="Couldn’t load"; document.getElementById("summary").textContent="Please try again in a moment."; });
   }
   function status(it,onfile){
     if(onfile) return ["On file","on"];

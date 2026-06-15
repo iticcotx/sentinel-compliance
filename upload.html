@@ -32,25 +32,24 @@
     <button id="go">Upload to OneDrive</button>
     <div class="msg" id="msg"></div>
   </div>
-<script src="data.js"></script>
 <script>
   var q = new URLSearchParams(location.search), id = q.get("item");
-  var items = (window.SENTINEL_SEED && window.SENTINEL_SEED.items) || [];
-  var cur = items.filter(function(x){ return x.id === id; })[0];
-  // all documents for this same provider/facility (so the user can pick any, not just the QR one)
-  var group = cur ? items.filter(function(x){ return x.entityKey === cur.entityKey && x.scope === cur.scope; }) : (cur ? [cur] : []);
-  group.sort(function(a,b){ return (a.category||"").localeCompare(b.category||""); });
-
+  var items = [], cur = null;
   var who = document.getElementById("who"), sel = document.getElementById("itemSel");
-  if (cur) {
-    who.textContent = cur.entity;
-    sel.innerHTML = group.map(function(it){
-      return '<option value="' + it.id + '"' + (it.id === id ? " selected" : "") + '>' + (it.category || it.id) + '</option>';
-    }).join("");
-  } else {
-    who.textContent = "Item: " + (id || "(none)");
-    sel.innerHTML = '<option value="' + (id || "") + '">' + (id || "(unknown)") + '</option>';
-  }
+  fetch("/api/provider?item=" + encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(p){
+    items = p.items || [];
+    cur = p.current || items.filter(function(x){ return x.id === id; })[0];
+    if (cur) {
+      who.textContent = cur.entity;
+      items.sort(function(a,b){ return (a.category||"").localeCompare(b.category||""); });
+      sel.innerHTML = items.map(function(it){
+        return '<option value="' + it.id + '"' + (it.id === id ? " selected" : "") + '>' + (it.category || it.id) + '</option>';
+      }).join("");
+    } else {
+      who.textContent = "Item: " + (id || "(none)");
+      sel.innerHTML = '<option value="' + (id || "") + '">' + (id || "(unknown)") + '</option>';
+    }
+  }).catch(function(){ who.textContent = "Couldn’t load — please try again."; });
 
   function setMsg(t,c){ var m=document.getElementById("msg"); m.style.color=c||"#9fd9d0"; m.textContent=t; }
   function setBar(p){ var b=document.getElementById("bar"); b.style.display=p==null?"none":"block"; document.getElementById("barfill").style.width=(p||0)+"%"; }

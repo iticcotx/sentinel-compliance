@@ -181,6 +181,23 @@
     return renderLogin();
   }
 
+  // Cloud: the user is already authenticated by Microsoft (window.SENTINEL_AUTH set by the
+  // index.html gate), so skip the code login entirely and open the app with full access.
+  function bootSentinel() {
+    if (window._booted) return; window._booted = true;
+    applyTheme(PREFS.theme);
+    if (window.SENTINEL_AUTH) {
+      CFG = resolveConfig() || { configured: true, loginIdHash: "", loginPwHash: "", tabHashes: {} };
+      const who = window.SENTINEL_AUTH.name || window.SENTINEL_AUTH.email || "Staff";
+      CURRENT_USER = { label: who, role: "admin", tabs: ["provider", "facility", "other"], readonly: /[?&]readonly=1/.test(location.search) };
+      READONLY = CURRENT_USER.readonly;
+      UNLOCKED = new Set(["provider", "facility", "other"]);  // signed-in staff: all tabs open
+      enterApp();
+    } else {
+      renderAuth();
+    }
+  }
+
   function authShell(inner) {
     $("#authCard").innerHTML =
       '<div class="logo-lockup"><svg class="mark" style="width:44px;height:44px"><use href="#logo-sentinel"/></svg>' +
@@ -324,7 +341,7 @@
     applyTheme(PREFS.theme);
     $("#genStamp").textContent = "data " + ((window.SENTINEL_SEED && window.SENTINEL_SEED.generatedAt) || "");
     $("#btnTheme").onclick = () => { applyTheme(PREFS.theme === "dark" ? "light" : "dark"); savePrefs(); };
-    $("#btnLock").onclick = lockApp;
+    $("#btnLock").onclick = () => { if (window.SENTINEL_AUTH) location.href = "/api/logout"; else lockApp(); };
     $("#btnExport").onclick = exportCSV;
     $("#btnPrint").onclick = doPrint;
     $("#homeLogo").onclick = goHome;
@@ -1470,6 +1487,6 @@
   if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
     try { navigator.serviceWorker.register("service-worker.js").catch(() => {}); } catch (e) {}
   }
-  document.addEventListener("DOMContentLoaded", () => { applyTheme(PREFS.theme); renderAuth(); });
-  if (document.readyState !== "loading") { applyTheme(PREFS.theme); renderAuth(); }
+  document.addEventListener("DOMContentLoaded", bootSentinel);
+  if (document.readyState !== "loading") bootSentinel();
 })();

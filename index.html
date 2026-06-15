@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sentinel">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=cloud17">
+<link rel="stylesheet" href="styles.css?v=cloud18">
 </head>
 <body>
 
@@ -102,10 +102,23 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=cloud17"></script>
-<script src="sha256.js?v=cloud17"></script>
-<script src="config.js?v=cloud17"></script>
-<script src="data.js?v=cloud17"></script>
-<script src="app.js?v=cloud17"></script>
+<script src="supabase-config.js?v=cloud18"></script>
+<script src="sha256.js?v=cloud18"></script>
+<script src="config.js?v=cloud18"></script>
+<!-- Microsoft sign-in gate: no roster data is loaded until the session is verified server-side. -->
+<script>
+(function () {
+  function toLogin() { location.replace("/api/auth-login"); }
+  fetch("/api/session").then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+    if (!s || !s.authed) { toLogin(); return; }
+    window.SENTINEL_AUTH = s;
+    return fetch("/api/data").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d || !d.items) { toLogin(); return; }
+      window.SENTINEL_SEED = d;
+      var sc = document.createElement("script"); sc.src = "app.js?v=cloud18"; document.body.appendChild(sc);
+    });
+  }).catch(toLogin);
+})();
+</script>
 </body>
 </html>

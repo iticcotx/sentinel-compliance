@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "redirects": [
+    { "source": "/data.json", "destination": "/api/data", "permanent": false },
+    { "source": "/data.js", "destination": "/api/data", "permanent": false }
+  ],
   "headers": [
     { "source": "/(.*)", "headers": [ { "key": "Cache-Control", "value": "no-store" } ] }
   ],
