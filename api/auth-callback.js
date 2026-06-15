@@ -2,7 +2,9 @@
 // id_token (came straight from Microsoft over TLS, so trusted), verify the user is
 // in OUR tenant, then set a signed session cookie and send them to the dashboard.
 const { sign, cookieHeader } = require("../lib/session");
+const { getAllowed, isAllowed } = require("../lib/access");
 
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 function page(title, body) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <body style="font-family:system-ui,Segoe UI,Arial;max-width:520px;margin:48px auto;padding:0 18px;color:#0f172a">
@@ -27,6 +29,13 @@ module.exports = async (req, res) => {
     const claims = JSON.parse(Buffer.from(j.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString());
     if (claims.tid !== tenant) { res.setHeader("Content-Type", "text/html"); res.status(403).send(page("Access denied", "<p>That account isn’t part of Wellness &amp; Care Group of Texas.</p>")); return; }
     const email = claims.preferred_username || claims.email || claims.upn || "staff";
+    // Allowlist: even within wcgtx, only approved people may enter.
+    const allowed = await getAllowed();
+    if (!isAllowed(email, allowed)) {
+      res.setHeader("Content-Type", "text/html");
+      res.status(403).send(page("Not authorized", "<p><b>" + esc(email) + "</b> isn’t on the access list for this dashboard.</p><p>Ask the administrator (Imad) to add you, then try again.</p>"));
+      return;
+    }
     const token = sign({ email, name: claims.name || email, exp: Date.now() + 1000 * 60 * 60 * 12 }); // 12 hours
     res.setHeader("Set-Cookie", cookieHeader(token, 60 * 60 * 12));
     res.writeHead(302, { Location: "/" });

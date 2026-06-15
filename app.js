@@ -371,12 +371,14 @@
       { label: "Document gaps", fn: openGapReport },
       { label: "Backup", fn: backup },
       { label: "Restore", fn: restore, edit: true },
-      { label: "Staff logins", fn: openUsers, admin: true }
+      { label: "Manage access", fn: openAccessPanel, cloudOnly: true },
+      { label: "Staff logins", fn: openUsers, admin: true, localOnly: true }
     ];
     const show = defs.filter(d => {
       if (d.admin && (!CURRENT_USER || CURRENT_USER.role !== "admin")) return false;
       if (d.edit && READONLY) return false;
       if (d.localOnly && CLOUD) return false;
+      if (d.cloudOnly && !CLOUD) return false;
       return true;
     });
     const c = $("#footLinks"); if (!c) return; c.innerHTML = "";
@@ -1334,6 +1336,31 @@
   }
   function exportXlsx() { svc("/api/export-xlsx", "✓ Excel written: sentinel-export.xlsx (in the dashboard folder)."); }
   function emailProviders() { svc("/api/email-providers", "✓ Reminder emails sent to providers.", "Email each provider their own expiring credentials now? Only providers with an email on file and items due within 90 days will be contacted."); }
+
+  // ================= MANAGE ACCESS (Microsoft sign-in allowlist, cloud) =================
+  function openAccessPanel() {
+    openModal("Manage access", '<div class="item-sub">Loading…</div>');
+    const draw = (emails, me) => {
+      const rows = emails.map(e => '<div class="audit-row"><span class="ac ' + (e.toLowerCase() === (me || "").toLowerCase() ? "renew" : "edit") + '">' + (e.toLowerCase() === (me || "").toLowerCase() ? "you" : "staff") + '</span><div style="flex:1">' + esc(e) + '</div>' + '<button class="icon-btn aremove" data-e="' + esc(e) + '">Remove</button></div>').join("");
+      const ip = "padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)";
+      openModal("Manage access — who can sign in",
+        '<div class="item-sub" style="margin-bottom:10px">Only these Microsoft accounts (in your organization) can open this dashboard. Add a coworker’s <b>@wcgtx.com</b> email to grant access.</div>' +
+        '<div id="alist">' + (rows || '<div class="item-sub">No one yet.</div>') + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:12px"><input id="aEmail" type="email" placeholder="name@wcgtx.com" style="flex:1;' + ip + '"><button class="btn-primary" id="aAdd" style="max-width:120px">Add</button></div>' +
+        '<div class="auth-msg" id="aMsg" style="min-height:16px;margin-top:6px"></div>');
+      [...$("#modalInner").querySelectorAll(".aremove")].forEach(b => b.onclick = () => post("remove", b.dataset.e));
+      $("#aAdd").onclick = () => { const v = $("#aEmail").value.trim(); if (!v) return; post("add", v); };
+    };
+    const post = (action, email) => {
+      $("#aMsg") && ($("#aMsg").textContent = "Saving…");
+      fetch("/api/allowed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, email }) })
+        .then(r => r.json()).then(d => { if (d.emails) draw(d.emails, _accessMe); else toast(d.error || "Failed"); })
+        .catch(() => toast("Couldn’t reach the server."));
+    };
+    let _accessMe = "";
+    fetch("/api/allowed").then(r => r.json()).then(d => { _accessMe = d.me || ""; draw(d.emails || [], _accessMe); })
+      .catch(() => openModal("Manage access", '<div class="empty"><h3>Unavailable</h3><p>This is only available on the signed-in cloud app.</p></div>'));
+  }
 
   // ================= STAFF LOGINS / ROLES =================
   function lsUsers() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || "[]"); } catch (e) { return []; } }

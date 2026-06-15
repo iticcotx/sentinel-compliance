@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sentinel">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=cloud18">
+<link rel="stylesheet" href="styles.css?v=cloud19">
 </head>
 <body>
 
@@ -102,22 +102,33 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=cloud18"></script>
-<script src="sha256.js?v=cloud18"></script>
-<script src="config.js?v=cloud18"></script>
+<script src="supabase-config.js?v=cloud19"></script>
+<script src="sha256.js?v=cloud19"></script>
+<script src="config.js?v=cloud19"></script>
 <!-- Microsoft sign-in gate: no roster data is loaded until the session is verified server-side. -->
 <script>
 (function () {
-  function toLogin() { location.replace("/api/auth-login"); }
+  function showSignIn() {
+    var c = document.getElementById("authCard");
+    c.innerHTML =
+      '<div class="logo-lockup"><svg class="mark" style="width:44px;height:44px"><use href="#logo-sentinel"/></svg>' +
+      '<div><div class="name" style="color:#fff"><b style="color:#5eead4">Sentinel</b></div>' +
+      '<div class="tag" style="color:#7fb8b0">Compliance Command Center</div></div></div>' +
+      '<div class="auth-sub" style="margin:16px 0 10px">Wellness &amp; Care Group of Texas</div>' +
+      '<button class="btn-primary" id="msSignIn" style="display:flex;align-items:center;justify-content:center;gap:10px">' +
+      '<svg width="18" height="18" viewBox="0 0 23 23"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M12 1h10v10H12z"/><path fill="#00a4ef" d="M1 12h10v10H1z"/><path fill="#ffb900" d="M12 12h10v10H12z"/></svg>Sign in with Microsoft</button>' +
+      '<div class="auth-sub" style="margin-top:14px;font-size:12px;opacity:.7">Access is limited to approved staff.</div>';
+    document.getElementById("msSignIn").onclick = function () { location.href = "/api/auth-login"; };
+  }
   fetch("/api/session").then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
-    if (!s || !s.authed) { toLogin(); return; }
+    if (!s || !s.authed) { showSignIn(); return; }
     window.SENTINEL_AUTH = s;
     return fetch("/api/data").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-      if (!d || !d.items) { toLogin(); return; }
+      if (!d || !d.items) { showSignIn(); return; }
       window.SENTINEL_SEED = d;
-      var sc = document.createElement("script"); sc.src = "app.js?v=cloud18"; document.body.appendChild(sc);
+      var sc = document.createElement("script"); sc.src = "app.js?v=cloud19"; document.body.appendChild(sc);
     });
-  }).catch(toLogin);
+  }).catch(showSignIn);
 })();
 </script>
 </body>
