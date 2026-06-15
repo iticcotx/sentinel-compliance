@@ -268,16 +268,21 @@
     } else { finish(); }
   }
 
-  // ---- Live sync of QR-uploaded documents (stored in OneDrive via /api/uploads-map) ----
+  // ---- Live sync of documents: QR uploads + files dropped straight into OneDrive ----
+  // /api/scan detects new files in OneDrive; /api/uploads-map returns the merged list.
   let _uploadsJSON = "";
+  function readUploadsMap() {
+    return fetch("/api/uploads-map").then(r => r.json());
+  }
   function pullCloudUploads(cb) {
     const done = (u) => { if (u && typeof u === "object") { _uploadsJSON = JSON.stringify(u); applyUploads(u); } if (cb) cb(); startUploadSync(); };
-    fetch("/api/uploads-map").then(r => r.json()).then(done, () => done(null)).catch(() => done(null));
+    // kick a scan (catch new OneDrive files), then read the merged map
+    fetch("/api/scan").catch(() => {}).then(() => readUploadsMap().then(done, () => done(null))).catch(() => done(null));
   }
   function startUploadSync() {
     if (window._upSync || !CLOUD) return;
     window._upSync = setInterval(() => {
-      fetch("/api/uploads-map").then(r => r.json()).then(u => {
+      fetch("/api/scan").catch(() => {}).then(() => readUploadsMap()).then(u => {
         const j = JSON.stringify(u || {});
         if (j !== _uploadsJSON) { _uploadsJSON = j; applyUploads(u); render(); toast("Documents updated."); }
       }).catch(() => {});
