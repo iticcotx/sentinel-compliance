@@ -1,13 +1,11 @@
-// The item_id -> uploaded-document map, stored as a small JSON file IN OneDrive
-// (_Sentinel/uploads.json) — no Supabase. GET returns it; POST adds one entry.
-// Only QR-uploaded docs live here; the 3,000+ pre-matched docs get their links
-// built client-side from data.json, so this file stays tiny.
-const { accessToken, drivePath, encPath, GRAPH } = require("../lib/graph");
+// item_id -> uploaded-document map, stored as _Sentinel/uploads.json IN OneDrive
+// (app-only, no Supabase). GET returns it; POST adds one entry.
+const { accessToken, drivePath, encPath, driveRoot, ensureFolder } = require("../lib/graph");
 
 const MAP_PATH = drivePath("_Sentinel/uploads.json");
 
 async function readMap(token) {
-  const r = await fetch(`${GRAPH}/me/drive/root:/${encPath(MAP_PATH)}:/content`, {
+  const r = await fetch(driveRoot() + "/root:/" + encPath(MAP_PATH) + ":/content", {
     headers: { Authorization: "Bearer " + token }
   });
   if (r.status === 404) return {};
@@ -16,7 +14,8 @@ async function readMap(token) {
 }
 
 async function writeMap(token, map) {
-  const r = await fetch(`${GRAPH}/me/drive/root:/${encPath(MAP_PATH)}:/content`, {
+  await ensureFolder(token, drivePath("_Sentinel"));
+  const r = await fetch(driveRoot() + "/root:/" + encPath(MAP_PATH) + ":/content", {
     method: "PUT",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(map)
