@@ -8,10 +8,11 @@
     background:radial-gradient(900px 500px at 50% -5%,#134e4a,#05222a 60%,#021015);color:#e9eef3}
   .card{background:#111a22;border:1px solid #1e2b36;border-radius:20px;padding:26px;max-width:440px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.5)}
   h1{font-size:19px;margin:0 0 2px;color:#5eead4}.sub{color:#7fb8b0;font-size:13px;margin-bottom:20px}
-  .meta{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:12px 14px;margin-bottom:18px;font-size:14px}.meta b{color:#fff}
-  label{display:block;font-size:12px;color:#a4b3c0;margin:0 0 8px}
-  input[type=file]{width:100%;color:#e9eef3;font-size:14px;background:rgba(255,255,255,.06);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.12)}
-  button{margin-top:18px;width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;font-weight:700;font-size:15px}
+  .who{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:15px;font-weight:700;color:#fff}
+  label{display:block;font-size:12px;color:#a4b3c0;margin:14px 0 8px}
+  select,input[type=file]{width:100%;color:#e9eef3;font-size:14px;background:rgba(255,255,255,.06);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);box-sizing:border-box}
+  select{appearance:none}
+  button{margin-top:20px;width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;font-weight:700;font-size:15px}
   button:disabled{opacity:.5}.msg{margin-top:16px;font-size:14px;font-weight:600;min-height:20px}
   .bar{height:6px;background:rgba(255,255,255,.1);border-radius:6px;margin-top:14px;overflow:hidden;display:none}.bar>i{display:block;height:100%;width:0;background:linear-gradient(135deg,#14b8a6,#5eead4);transition:width .2s}
 </style></head>
@@ -19,9 +20,14 @@
   <div class="card">
     <h1>Sentinel — Upload document</h1>
     <div class="sub">Wellness &amp; Care Group of Texas</div>
-    <div class="meta" id="meta">Loading…</div>
-    <label>Choose a file or take a photo of the document</label>
+    <div class="who" id="who">Loading…</div>
+
+    <label for="itemSel">Which document are you uploading?</label>
+    <select id="itemSel"></select>
+
+    <label for="file">Choose a file or take a photo</label>
     <input type="file" id="file" accept="application/pdf,image/*" capture="environment">
+
     <div class="bar" id="bar"><i id="barfill"></i></div>
     <button id="go">Upload to OneDrive</button>
     <div class="msg" id="msg"></div>
@@ -30,27 +36,37 @@
 <script>
   var q = new URLSearchParams(location.search), id = q.get("item");
   var items = (window.SENTINEL_SEED && window.SENTINEL_SEED.items) || [];
-  var it = items.filter(function(x){ return x.id === id; })[0];
-  document.getElementById("meta").innerHTML = it
-    ? ("<b>" + it.category + "</b><br>" + it.entity)
-    : ("Item: " + (id || "(none)"));
+  var cur = items.filter(function(x){ return x.id === id; })[0];
+  // all documents for this same provider/facility (so the user can pick any, not just the QR one)
+  var group = cur ? items.filter(function(x){ return x.entityKey === cur.entityKey && x.scope === cur.scope; }) : (cur ? [cur] : []);
+  group.sort(function(a,b){ return (a.category||"").localeCompare(b.category||""); });
 
-  function setMsg(t, c){ var m = document.getElementById("msg"); m.style.color = c || "#9fd9d0"; m.textContent = t; }
-  function setBar(p){ var b = document.getElementById("bar"); b.style.display = p == null ? "none" : "block"; document.getElementById("barfill").style.width = (p||0) + "%"; }
+  var who = document.getElementById("who"), sel = document.getElementById("itemSel");
+  if (cur) {
+    who.textContent = cur.entity;
+    sel.innerHTML = group.map(function(it){
+      return '<option value="' + it.id + '"' + (it.id === id ? " selected" : "") + '>' + (it.category || it.id) + '</option>';
+    }).join("");
+  } else {
+    who.textContent = "Item: " + (id || "(none)");
+    sel.innerHTML = '<option value="' + (id || "") + '">' + (id || "(unknown)") + '</option>';
+  }
+
+  function setMsg(t,c){ var m=document.getElementById("msg"); m.style.color=c||"#9fd9d0"; m.textContent=t; }
+  function setBar(p){ var b=document.getElementById("bar"); b.style.display=p==null?"none":"block"; document.getElementById("barfill").style.width=(p||0)+"%"; }
 
   document.getElementById("go").onclick = async function(){
     var f = document.getElementById("file").files[0], b = document.getElementById("go");
     if (!f) { setMsg("Please choose a file first.", "#fca5a5"); return; }
-    if (!it) { setMsg("This item couldn't be found.", "#fca5a5"); return; }
-    var folder = it.folderLink || it.fileLink || "";   // the provider/facility folder on OneDrive
+    var chosenId = sel.value;
+    var chosen = items.filter(function(x){ return x.id === chosenId; })[0] || cur;
+    var folder = (chosen && (chosen.folderLink || chosen.fileLink)) || "";
+    if (!folder) { setMsg("Couldn't determine the folder for this item.", "#fca5a5"); return; }
     b.disabled = true; setMsg("Preparing…"); setBar(5);
     try {
-      // 1) Ask our server to open an upload slot in the right OneDrive folder.
       var r1 = await fetch("/api/upload-start?folder=" + encodeURIComponent(folder) + "&name=" + encodeURIComponent(f.name));
       var s = await r1.json();
       if (!s.ok) throw new Error(s.message || "could not start upload");
-
-      // 2) Send the file straight to OneDrive (bypasses our server's size limit).
       setMsg("Uploading to OneDrive…"); setBar(15);
       var put = await new Promise(function(resolve, reject){
         var xhr = new XMLHttpRequest();
@@ -62,21 +78,15 @@
         xhr.send(f);
       });
       setBar(98);
-
-      // 3) Record item -> file link so it shows in Sentinel.
-      var webUrl = put.webUrl || "";
       await fetch("/api/uploads-map", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_id: id, url: webUrl, name: f.name })
+        body: JSON.stringify({ item_id: chosenId, url: put.webUrl || "", name: f.name })
       }).catch(function(){});
-
       setBar(100);
-      setMsg("✓ Saved to OneDrive. It now shows in Sentinel for this item.", "#6ee7b7");
+      setMsg("✓ Saved to OneDrive for: " + (chosen ? chosen.category : chosenId), "#6ee7b7");
       b.disabled = false;
     } catch (e) {
-      setBar(null);
-      setMsg("Failed: " + (e.message || e), "#fca5a5");
-      b.disabled = false;
+      setBar(null); setMsg("Failed: " + (e.message || e), "#fca5a5"); b.disabled = false;
     }
   };
 </script>
