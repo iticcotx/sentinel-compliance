@@ -259,11 +259,29 @@
     if (CLOUD && SB) {
       SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
         if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {} }, res.data.data); buildData(); }
-        SB.from("uploads").select("item_id,url,name").then(u => { const m = {}; (u.data || []).forEach(r => m[r.item_id] = { url: r.url, name: r.name }); applyUploads(m); finish(); }, finish);
-      }, finish);
+        pullCloudUploads(finish);
+      }, () => pullCloudUploads(finish));
+    } else if (CLOUD) {
+      pullCloudUploads(finish);
     } else if (location.protocol.indexOf("http") === 0) {
       fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); finish(); }).catch(finish);
     } else { finish(); }
+  }
+
+  // ---- Live sync of QR-uploaded documents (stored in OneDrive via /api/uploads-map) ----
+  let _uploadsJSON = "";
+  function pullCloudUploads(cb) {
+    const done = (u) => { if (u && typeof u === "object") { _uploadsJSON = JSON.stringify(u); applyUploads(u); } if (cb) cb(); startUploadSync(); };
+    fetch("/api/uploads-map").then(r => r.json()).then(done, () => done(null)).catch(() => done(null));
+  }
+  function startUploadSync() {
+    if (window._upSync || !CLOUD) return;
+    window._upSync = setInterval(() => {
+      fetch("/api/uploads-map").then(r => r.json()).then(u => {
+        const j = JSON.stringify(u || {});
+        if (j !== _uploadsJSON) { _uploadsJSON = j; applyUploads(u); render(); toast("Documents updated."); }
+      }).catch(() => {});
+    }, 45000);
   }
 
   function lockApp() {
