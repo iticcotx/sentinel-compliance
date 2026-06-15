@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — My Documents</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:0;min-height:100vh;padding:18px;
+    background:radial-gradient(900px 500px at 50% -5%,#134e4a,#05222a 60%,#021015);color:#e9eef3}
+  .wrap{max-width:560px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 2px;color:#5eead4}.sub{color:#7fb8b0;font-size:13px;margin-bottom:18px}
+  .who{font-size:18px;font-weight:800;color:#fff;margin-bottom:4px}
+  .item{background:#111a22;border:1px solid #1e2b36;border-radius:14px;padding:14px 16px;margin-bottom:10px}
+  .item .cat{font-weight:700;font-size:15px}
+  .item .meta{font-size:12px;color:#9fb4c0;margin-top:2px}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:6px}
+  .on{background:#dcfce7;color:#166534}.miss{background:#fef3c7;color:#92400e}.exp{background:#fee2e2;color:#991b1b}
+  .act{margin-top:10px}
+  input[type=file]{width:100%;color:#e9eef3;font-size:13px;background:rgba(255,255,255,.06);padding:9px;border-radius:9px;border:1px solid rgba(255,255,255,.12);box-sizing:border-box}
+  button{margin-top:8px;padding:9px 14px;border:none;border-radius:9px;background:linear-gradient(135deg,#14b8a6,#0f766e);color:#fff;font-weight:700;font-size:13px;cursor:pointer}
+  button:disabled{opacity:.5}.m{font-size:12px;font-weight:600;margin-top:6px;min-height:14px}
+</style></head>
+<body><div class="wrap">
+  <h1>Sentinel — My Documents</h1>
+  <div class="sub">Wellness &amp; Care Group of Texas</div>
+  <div class="who" id="who">Loading…</div>
+  <div class="sub" id="summary"></div>
+  <div id="list"></div>
+</div>
+<script src="data.js"></script>
+<script>
+  var q=new URLSearchParams(location.search), ekey=q.get("e");
+  var items=((window.SENTINEL_SEED&&window.SENTINEL_SEED.items)||[]).filter(function(x){return x.entityKey===ekey;});
+  var who=document.getElementById("who"), list=document.getElementById("list");
+  if(!items.length){ who.textContent="Provider not found"; }
+  else {
+    who.textContent=items[0].entity;
+    fetch("/api/uploads-map").then(function(r){return r.json();}).then(render).catch(function(){render({});});
+  }
+  function status(it,onfile){
+    if(onfile) return ["On file","on"];
+    if(it.expires){ var d=new Date(it.expires), now=new Date(); var days=Math.floor((d-now)/86400000);
+      if(days<0) return ["Expired — please send","exp"]; if(days<=90) return ["Renewing soon — please send","exp"]; }
+    return ["Needed","miss"];
+  }
+  function render(map){
+    var have=0;
+    list.innerHTML="";
+    items.sort(function(a,b){return (a.category||"").localeCompare(b.category||"");});
+    items.forEach(function(it){
+      var onfile = it.isFile || (map && map[it.id]);
+      if(onfile) have++;
+      var st=status(it,onfile);
+      var row=document.createElement("div"); row.className="item";
+      row.innerHTML='<div class="cat">'+it.category+'</div>'+
+        '<div class="meta">'+(it.authority||"")+(it.expires?' · expires '+it.expires:'')+'</div>'+
+        '<span class="pill '+st[1]+'">'+(onfile?'✓ ':'')+st[0]+'</span>'+
+        '<div class="act"><input type="file" accept="application/pdf,image/*" capture="environment"><button>Upload</button><div class="m"></div></div>';
+      var file=row.querySelector("input"), btn=row.querySelector("button"), m=row.querySelector(".m");
+      btn.onclick=function(){ doUpload(it,file,btn,m,row); };
+      list.appendChild(row);
+    });
+    document.getElementById("summary").textContent=have+" of "+items.length+" documents on file.";
+  }
+  async function doUpload(it,file,btn,m,row){
+    var f=file.files[0]; if(!f){ m.style.color="#fca5a5"; m.textContent="Choose a file first."; return; }
+    var folder=it.folderLink||it.fileLink||""; btn.disabled=true; m.style.color="#9fd9d0"; m.textContent="Uploading…";
+    try{
+      var s=await (await fetch("/api/upload-start?folder="+encodeURIComponent(folder)+"&name="+encodeURIComponent(f.name))).json();
+      if(!s.ok) throw new Error(s.message||"start failed");
+      await new Promise(function(res,rej){ var x=new XMLHttpRequest(); x.open("PUT",s.uploadUrl,true);
+        x.setRequestHeader("Content-Range","bytes 0-"+(f.size-1)+"/"+f.size);
+        x.onload=function(){ (x.status>=200&&x.status<300)?res(JSON.parse(x.responseText||"{}")):rej(new Error("HTTP "+x.status)); };
+        x.onerror=function(){rej(new Error("network error"));}; x.send(f);
+      }).then(function(put){
+        return fetch("/api/uploads-map",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item_id:it.id,url:put.webUrl||"",name:f.name})});
+      });
+      m.style.color="#6ee7b7"; m.textContent="✓ Received. Thank you!";
+      row.querySelector(".pill").className="pill on"; row.querySelector(".pill").textContent="✓ On file";
+      btn.disabled=false;
+    }catch(e){ m.style.color="#fca5a5"; m.textContent="Failed: "+(e.message||e); btn.disabled=false; }
+  }
+</script>
+</body></html>

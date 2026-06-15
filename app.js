@@ -575,11 +575,12 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all items in this group">' : "") +
         '<div class="avatar" style="' + (isProvider ? "" : "background:linear-gradient(135deg,#6366f1,#4f46e5)") + '">' + (isProvider ? esc(initials) : '<svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg>') + '</div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
+        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 6l6 6-6 6"/></svg>';
       head.onclick = () => { state.openGroups[name] = !open; renderContent(); };
       g.appendChild(head);
       const bb = head.querySelector(".binder-btn"); if (bb) bb.onclick = (e) => { e.stopPropagation(); printBinder(name); };
+      const pb = head.querySelector(".portal-btn"); if (pb) pb.onclick = (e) => { e.stopPropagation(); openProviderPortal(items[0].entityKey, name); };
       wireGroupCheck(head, items);
       const body = el("div", "group-body");
       sortItems(items).forEach(it => body.appendChild(itemRow(it)));
@@ -1350,6 +1351,18 @@
   }
 
   // ================= QR CODES =================
+  // Provider self-service portal: one QR/link showing the provider's whole checklist + per-item upload.
+  function openProviderPortal(ekey, name) {
+    const origin = (CLOUD ? location.origin : "https://sentinel-compliance-kappa.vercel.app");
+    const url = origin + "/provider.html?e=" + encodeURIComponent(ekey);
+    const qr = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + encodeURIComponent(url);
+    openModal("Provider portal — " + esc(name),
+      '<div style="text-align:center"><img src="' + qr + '" alt="QR code" style="width:240px;height:240px;border-radius:12px;border:1px solid var(--hair);background:#fff;padding:8px">' +
+      '<div class="item-sub" style="margin-top:12px;max-width:380px;margin-left:auto;margin-right:auto">Share this QR or link with <b>' + esc(name) + '</b>. They’ll see which documents are on file vs. needed, and can upload each one — no login required.</div>' +
+      '<div class="item-sub" style="margin-top:10px;word-break:break-all;opacity:.85"><a href="' + url + '" target="_blank" rel="noopener">' + esc(url) + '</a></div>' +
+      '<div style="margin-top:10px"><button class="icon-btn" id="ppCopy">Copy link</button></div></div>');
+    const c = $("#ppCopy"); if (c) c.onclick = () => { try { navigator.clipboard.writeText(url); toast("Link copied."); } catch (e) { toast("Copy not available — select the link."); } };
+  }
   function wireQR(it) { const b = $("#dQR"); if (b) b.onclick = () => openQR(it); }
   function openQR(it) {
     if (CLOUD) {
@@ -1382,6 +1395,8 @@
       const url = (typeof v === "string") ? v : v.url; if (!url) return;
       it.fileLink = url; it.isFile = true; it.uploaded = true;
       if (typeof v === "object" && v.name) it.uploadName = v.name;
+      // #6: if a date was read from the uploaded file's name, use it as the expiry.
+      if (typeof v === "object" && v.date && !OVERLAY.edits[it.id]) { it.expires = v.date; it.permanent = false; it.pending = false; it.expiresAuto = true; }
     });
   }
   function handleDeepLink() {

@@ -3,7 +3,7 @@
 // processes only files added/changed since last time and matches them to items
 // (same filename rules as the local matcher). Results -> _Sentinel/auto_detected.json,
 // which /api/uploads-map merges into what the dashboard reads.
-const { accessToken, driveRoot, drivePath, encPath, readJsonAt, writeJsonAt } = require("../lib/graph");
+const { accessToken, driveRoot, drivePath, encPath, readJsonAt, writeJsonAt, dateFromName } = require("../lib/graph");
 const data = require("../data.json");
 
 const ROOTSEG = "WCGTX Phyicians_04.08.2020";
@@ -95,7 +95,7 @@ module.exports = async (req, res) => {
         const it = matchItem(folderRel, v.name || "");
         if (!it) continue;
         if (v.deleted) { if (detected[it.id] && detected[it.id].name === v.name) { delete detected[it.id]; changed++; } }
-        else { detected[it.id] = { url: v.webUrl || "", name: v.name }; changed++; }
+        else { detected[it.id] = { url: v.webUrl || "", name: v.name, date: dateFromName(v.name) }; changed++; }
       }
       next = j["@odata.nextLink"]; deltaLink = j["@odata.deltaLink"] || deltaLink; pages++;
     }

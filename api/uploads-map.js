@@ -2,7 +2,7 @@
 //   _Sentinel/auto_detected.json  (files dropped straight into OneDrive — from /api/scan)
 //   _Sentinel/uploads.json        (files sent via the QR upload page — these win)
 // GET returns the merged map; POST adds a QR-upload entry. All app-only, no Supabase.
-const { accessToken, readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
+const { accessToken, readJsonAt, writeJsonAt, drivePath, dateFromName } = require("../lib/graph");
 
 const UPLOADS = drivePath("_Sentinel/uploads.json");
 const DETECTED = drivePath("_Sentinel/auto_detected.json");
@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
       let b = {}; try { b = JSON.parse(raw || "{}"); } catch (e) {}
       if (!b.item_id || !b.url) { res.status(400).json({ ok: false, message: "need item_id and url" }); return; }
       const map = (await readJsonAt(token, UPLOADS)) || {};
-      map[b.item_id] = { url: b.url, name: b.name || "" };
+      map[b.item_id] = { url: b.url, name: b.name || "", date: dateFromName(b.name || "") };
       await writeJsonAt(token, UPLOADS, map);
       res.status(200).json({ ok: true });
       return;
