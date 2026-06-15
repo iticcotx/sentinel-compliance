@@ -701,6 +701,8 @@
         '<div class="item-sub" style="margin-bottom:8px">⚠️ No proof document attached yet for this item.</div>' + action + '</div>';
     }
     const fileHref = isUrl ? raw : encodePath(raw);
+    // "Open in Outlook" = open in the Microsoft 365 web (Office/OneDrive) viewer, where the user is signed in.
+    const viewerHref = fileHref + (fileHref.indexOf("?") >= 0 ? "&" : "?") + "web=1";
     const inlinePdf = /\.pdf(\?|#|$)/i.test(raw);   // local/Supabase PDFs preview inline; SharePoint viewer links don't
     const fname = it.uploadName || (isUrl ? "" : decodeURIComponent(raw.split("/").pop()));
     const preview = inlinePdf
@@ -711,7 +713,7 @@
       (fname ? '<div class="pdf-name">📄 ' + esc(fname) + '</div>' : '') + preview +
       '<div class="doc-btns"><a class="doc-link" href="' + fileHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.doc + '</svg>Open document</a>' +
       ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
-      (READONLY ? '' : '<button class="doc-link ghost" id="dAttach">Change document</button>') +
+      '<a class="doc-link ghost" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open in Outlook</a>' +
       '</div></div>';
   }
   function wireAttach(it) {
