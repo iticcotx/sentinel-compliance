@@ -1,13 +1,16 @@
-// Sends a single templated provider email via Gmail (same creds as the digest).
-// TEST MODE: recipient is forced to TEMPLATE_TEST_TO (default imadaijaz2000@gmail.com),
-// so nothing reaches real providers until we flip that env var on purpose.
+// Sends a single templated provider email (preview goes to the signed-in staff member's
+// own inbox). Sent via the Gmail SMTP relay; recipient = the logged-in wcgtx account.
 const nodemailer = require("nodemailer");
+const { getSession } = require("../lib/session");
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") { res.status(405).json({ ok: false, message: "POST only" }); return; }
+
+  const s = getSession(req);
+  if (!s) { res.status(401).json({ ok: false, message: "sign-in required" }); return; }
 
   let raw = ""; await new Promise(r => { req.on("data", c => raw += c); req.on("end", r); });
   let b = {}; try { b = JSON.parse(raw || "{}"); } catch (e) {}
@@ -16,7 +19,7 @@ module.exports = async (req, res) => {
   const text = b.text || "";
 
   const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASSWORD;
-  const to = process.env.TEMPLATE_TEST_TO || "imadaijaz2000@gmail.com";   // TEST: always to Imad
+  const to = s.email;   // send to the signed-in staff member's own inbox
   if (!user || !pass) { res.status(200).json({ ok: false, message: "Set GMAIL_USER and GMAIL_APP_PASSWORD in Vercel env vars." }); return; }
   if (!html && !text) { res.status(200).json({ ok: false, message: "empty email body" }); return; }
 

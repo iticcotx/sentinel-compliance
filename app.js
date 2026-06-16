@@ -893,36 +893,27 @@
   function emailMe() {
     const scopes = [["provider", "Provider Compliance"], ["facility", "Facility Compliance"], ["other", "Other Compliance"]].filter(s => !CURRENT_USER || CURRENT_USER.tabs.indexOf(s[0]) >= 0);
     const ip = "width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)";
-    const rows = scopes.map(s => '<div style="border:1px solid var(--hair);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-      '<label class="toggle-pill" style="display:flex;gap:10px;cursor:pointer"><input type="checkbox" class="em-scope" value="' + s[0] + '"> <b>' + s[1] + '</b></label>' +
-      '<input type="password" class="em-code" data-scope="' + s[0] + '" placeholder="Access code for ' + s[1] + '" style="' + ip + ';margin-top:8px;display:none"></div>').join("");
-    const body = '<div class="item-sub" style="margin-bottom:14px">Choose tab(s) to email to <b>imadaijaz2000@gmail.com</b>. Enter <b>each</b> selected tab’s own access code to confirm.</div>' +
+    const inbox = (window.SENTINEL_AUTH && window.SENTINEL_AUTH.email) || "your inbox";
+    const rows = scopes.map(s => '<label class="toggle-pill" style="display:flex;gap:10px;cursor:pointer;border:1px solid var(--hair);border-radius:10px;padding:10px 12px;margin-bottom:8px"><input type="checkbox" class="em-scope" value="' + s[0] + '" checked> <b>' + s[1] + '</b></label>').join("");
+    const body = '<div class="item-sub" style="margin-bottom:14px">Email the report for your tab(s) to <b>' + esc(inbox) + '</b> (your signed-in account).</div>' +
       rows + '<div class="auth-msg" id="emMsg" style="color:var(--st-expired);min-height:16px"></div>' +
       '<div class="drawer-actions" style="border:none;padding:6px 0 0"><button class="save" id="emSend">Send email</button></div>';
     openModal("Email a report", body);
-    [...$("#modalInner").querySelectorAll(".em-scope")].forEach(cb => cb.onchange = () => {
-      const f = $("#modalInner").querySelector('.em-code[data-scope="' + cb.value + '"]');
-      f.style.display = cb.checked ? "block" : "none"; if (cb.checked) f.focus();
-    });
     $("#emSend").onclick = () => {
       const sel = [...$("#modalInner").querySelectorAll(".em-scope:checked")].map(c => c.value);
       if (!sel.length) { $("#emMsg").textContent = "Select at least one tab."; return; }
-      for (const s of sel) {
-        const code = $("#modalInner").querySelector('.em-code[data-scope="' + s + '"]').value;
-        if (hash(code) !== CFG.tabHashes[s]) { $("#emMsg").textContent = "Wrong access code for the " + s + " tab."; return; }
-      }
-      closeModal(); toast("Sending email to imadaijaz2000@gmail.com…");
+      closeModal(); toast("Sending email…");
       const endpoint = CLOUD ? "/api/digest" : "http://localhost:8765/api/send-digest";
       fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scopes: sel }) })
         .then(r => r.json())
-        .then(d => toast(d.ok ? ("✓ Emailed report (" + sel.join(", ") + ")") : ("Send failed: " + (d.message || "").slice(-120))))
+        .then(d => toast(d.ok ? ("✓ Emailed report to " + (d.to || inbox)) : ("Send failed: " + (d.message || "").slice(-120))))
         .catch(() => toast(CLOUD ? "Email function error — check Vercel env vars." : "Email service not running — open via Start-Sentinel.bat, then try again."));
     };
   }
 
   // ================= TEMPLATED PROVIDER EMAILS =================
   // Built from Cynthia's Word templates. Blanks auto-fill from the item; user can edit.
-  // TEST MODE: the server sends to imadaijaz2000@gmail.com only (not real providers yet).
+  // The server sends the preview to the signed-in staff member's own inbox.
   const SIG_CRED = "\nThank You,\nCynthia Wray\nCredentialing Specialist\ncredentialing@wcgtx.com\n21175 Tomball Parkway #504  Houston, TX 77070   Ph# 346-226-6811 ext 1001";
   const SIG_ICCT = "\nThank you,\nCynthia Wray\nCredentialing Specialist\nImmediate Care Centers of Texas\ncwray@wcgtx.com";
   function greetingNow() { const h = new Date().getHours(); return h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; }

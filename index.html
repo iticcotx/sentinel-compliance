@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sentinel">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=cloud23">
+<link rel="stylesheet" href="styles.css?v=cloud24">
 </head>
 <body>
 
@@ -61,7 +61,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
       <span id="bellCount" style="position:absolute;top:-6px;right:-6px;background:var(--st-expired);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:10px;display:none;align-items:center;justify-content:center;padding:0 4px">0</span>
     </button>
-    <button class="icon-btn" id="btnEmail" title="Email this report to imadaijaz2000@gmail.com">
+    <button class="icon-btn" id="btnEmail" title="Email this report to your inbox">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Email me
     </button>
     <button class="icon-btn" id="btnExport" title="Export all to CSV">
@@ -102,9 +102,9 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase-config.js?v=cloud23"></script>
-<script src="sha256.js?v=cloud23"></script>
-<script src="config.js?v=cloud23"></script>
+<script src="supabase-config.js?v=cloud24"></script>
+<script src="sha256.js?v=cloud24"></script>
+<script src="config.js?v=cloud24"></script>
 <!-- Microsoft sign-in gate: no roster data is loaded until the session is verified server-side. -->
 <script>
 (function () {
@@ -126,7 +126,7 @@
     return fetch("/api/data").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       if (!d || !d.items) { showSignIn(); return; }
       window.SENTINEL_SEED = d;
-      var sc = document.createElement("script"); sc.src = "app.js?v=cloud23"; document.body.appendChild(sc);
+      var sc = document.createElement("script"); sc.src = "app.js?v=cloud24"; document.body.appendChild(sc);
     });
   }).catch(showSignIn);
 })();
