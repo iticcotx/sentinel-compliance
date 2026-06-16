@@ -595,10 +595,12 @@
       const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + ' ' + k + '</span>').join("");
       const inactiveTag = (isProvider && items[0].active === false) ? ' <span class="pill s-pending">inactive</span>' : "";
       const rosterNote = items[0].rosterNote ? ' <span class="pill s-pending">' + esc(items[0].rosterNote) + '</span>' : "";
-      const head = el("div", "group-head" + (isProvider ? "" : " green"));
+      const isTest = items[0].entityKey === "aijaz-imad";
+      const testTag = isTest ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
+      const head = el("div", "group-head" + ((!isProvider || isTest) ? " green" : ""));
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all items in this group">' : "") +
         '<div class="avatar" style="' + (isProvider ? "" : "background:linear-gradient(135deg,#6366f1,#4f46e5)") + '">' + (isProvider ? esc(initials) : '<svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg>') + '</div>' +
-        '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
+        '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + testTag + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
         '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 6l6 6-6 6"/></svg>';
       head.onclick = () => { state.openGroups[name] = !open; renderContent(); };
