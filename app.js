@@ -370,8 +370,8 @@
       { label: "Save to Excel", fn: exportXlsx, edit: true, localOnly: true },
       { label: "Change log", fn: openAudit },
       { label: "Document gaps", fn: openGapReport },
-      { label: "Backup", fn: backup },
-      { label: "Restore", fn: restore, edit: true },
+      { label: "Backup", fn: backup, admin: true },
+      { label: "Restore", fn: restore, edit: true, admin: true },
       { label: "Manage access", fn: openAccessPanel, cloudOnly: true, admin: true },
       { label: "Staff logins", fn: openUsers, admin: true, localOnly: true }
     ];
