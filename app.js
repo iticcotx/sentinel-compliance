@@ -597,12 +597,13 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all items in this group">' : "") +
         '<div class="avatar" style="' + (isProvider ? "" : "background:linear-gradient(135deg,#6366f1,#4f46e5)") + '">' + (isProvider ? esc(initials) : '<svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg>') + '</div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + testTag + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
+        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn pemail-btn" title="Email this provider (to their email)" style="padding:5px 10px">✉ Email provider</button><button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 6l6 6-6 6"/></svg>';
       head.onclick = () => { state.openGroups[name] = !open; renderContent(); };
       g.appendChild(head);
       const bb = head.querySelector(".binder-btn"); if (bb) bb.onclick = (e) => { e.stopPropagation(); printBinder(name); };
       const pb = head.querySelector(".portal-btn"); if (pb) pb.onclick = (e) => { e.stopPropagation(); openProviderPortal(items[0].entityKey, name); };
+      const peb = head.querySelector(".pemail-btn"); if (peb) peb.onclick = (e) => { e.stopPropagation(); openEmailTemplate(items[0]); };
       wireGroupCheck(head, items);
       const body = el("div", "group-body");
       sortItems(items).forEach(it => body.appendChild(itemRow(it)));
@@ -781,7 +782,7 @@
       '<div class="dfield"><div class="dl">Renewal log</div><div id="logList">' + (logs.length ? logs.map(L => '<div class="log-entry">' + esc(L.text) + ' <small>— ' + L.date + '</small></div>').join("") : '<div class="item-sub">No log entries yet.</div>') + '</div>' +
       '<div style="display:flex;gap:6px;margin-top:8px"><input id="logIn" placeholder="Add a renewal note…" style="flex:1;padding:9px 11px;border-radius:9px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)"><button class="icon-btn" id="logAdd">Add</button></div></div>' +
       '</div>' +
-      '<div class="drawer-actions">' + (READONLY ? "" : '<button id="dRenew" class="save">✓ Mark renewed</button><button id="dEdit">Edit</button>') + '<button id="dWatch">' + (isWatched(it.id) ? "★ Watching" : "☆ Watch") + '</button><button id="dIcs">Calendar (.ics)</button><button id="dQR">QR code</button><button id="dEmail">✉️ Email</button>' + (READONLY ? "" : '<button id="dDel" class="del">Delete</button>') + '</div>';
+      '<div class="drawer-actions">' + (READONLY ? "" : '<button id="dRenew" class="save">✓ Mark renewed</button><button id="dEdit">Edit</button>') + '<button id="dWatch">' + (isWatched(it.id) ? "★ Watching" : "☆ Watch") + '</button><button id="dIcs">Calendar (.ics)</button><button id="dQR">QR code</button>' + (it.scope === "provider" ? '<button id="dEmail">✉️ Email provider</button>' : "") + (READONLY ? "" : '<button id="dDel" class="del">Delete</button>') + '</div>';
     $("#dClose").onclick = closeDrawer;
     if ($("#dEdit")) $("#dEdit").onclick = () => renderDrawerEdit(it, false);
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
@@ -978,12 +979,13 @@
     let cur = "reminder";
     const ip = "width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)";
     const opts = Object.keys(EMAIL_TEMPLATES).map(k => '<option value="' + k + '">' + EMAIL_TEMPLATES[k].label + '</option>').join("");
-    openModal("Email this provider (from template)",
-      '<div class="item-sub" style="margin-bottom:10px">Pick a template — the blanks fill from this provider, and a scan-to-upload QR is added automatically.</div>' +
+    openModal("Email provider (from template)",
+      '<div class="item-sub" style="margin-bottom:10px">This goes to the provider\'s email below (auto-detected — edit if needed). A scan-to-upload QR is added automatically.</div>' +
+      '<div class="dl">To — provider\'s email</div><input id="etTo" value="' + esc(it.email || "") + '" placeholder="provider@email.com" style="' + ip + ';margin-bottom:10px">' +
       '<div class="dl">Template</div><select id="etSel" style="' + ip + ';margin-bottom:10px">' + opts + '</select>' +
       '<div id="etFields"></div>' +
       '<div class="dl" style="margin-top:8px">Preview</div><div id="etPrev" style="border:1px solid var(--hair);border-radius:10px;padding:12px;background:#fff;max-height:300px;overflow:auto"></div>' +
-      '<div class="drawer-actions" style="border:none;padding:10px 0 0"><button class="save" id="etSend">Send test email</button></div>');
+      '<div class="drawer-actions" style="border:none;padding:10px 0 0"><button class="save" id="etSend">Send to provider</button></div>');
     const vals = () => { const o = {}; [...$("#modalInner").querySelectorAll(".etf")].forEach(i => o[i.dataset.k] = i.value); return o; };
     const refreshPrev = () => { $("#etPrev").innerHTML = tmplToHtml(EMAIL_TEMPLATES[cur].body(vals())) + uploadQrBlock(it); };
     const drawFields = () => {
@@ -996,9 +998,11 @@
     drawFields();
     $("#etSend").onclick = () => {
       const t = EMAIL_TEMPLATES[cur], v = vals();
+      const to = ($("#etTo").value || "").trim();
+      if (!to) { toast("Enter the provider's email first."); return; }
       const upUrl = (CLOUD ? location.origin : "https://sentinel-compliance-kappa.vercel.app") + "/upload.html?item=" + encodeURIComponent(it.id);
-      const payload = { subject: t.subj(v), html: tmplToHtml(t.body(v)) + uploadQrBlock(it), text: t.body(v) + "\n\nUpload your document here: " + upUrl };
-      closeModal(); toast("Sending email…");
+      const payload = { to: to, subject: t.subj(v), html: tmplToHtml(t.body(v)) + uploadQrBlock(it), text: t.body(v) + "\n\nUpload your document here: " + upUrl };
+      closeModal(); toast("Sending email to " + to + "…");
       const endpoint = CLOUD ? "/api/send-template" : "http://localhost:8765/api/send-template";
       fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         .then(r => r.json())

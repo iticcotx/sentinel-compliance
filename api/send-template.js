@@ -19,7 +19,8 @@ module.exports = async (req, res) => {
   const text = b.text || "";
 
   const user = process.env.GMAIL_USER, pass = process.env.GMAIL_APP_PASSWORD;
-  const to = s.email;   // send to the signed-in staff member's own inbox
+  // Send to the provider's email when given (Email provider); otherwise the signed-in user.
+  const to = (b.to && /^\S+@\S+\.\S+$/.test(String(b.to).trim())) ? String(b.to).trim() : s.email;
   if (!user || !pass) { res.status(200).json({ ok: false, message: "Set GMAIL_USER and GMAIL_APP_PASSWORD in Vercel env vars." }); return; }
   if (!html && !text) { res.status(200).json({ ok: false, message: "empty email body" }); return; }
 
