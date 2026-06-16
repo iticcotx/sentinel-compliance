@@ -275,12 +275,16 @@
     if (CLOUD) document.body.classList.add("cloud");
     const finish = () => { render(); handleDeepLink(); };
     if (CLOUD && SB) {
+      // Show the dashboard as soon as overlay loads; fetch document badges (scan + uploads
+      // map — the slow Microsoft calls) in the BACKGROUND and re-render when ready.
       SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
         if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, res.data.data); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); }
-        pullCloudUploads(finish);
-      }, () => pullCloudUploads(finish));
+        finish();
+        pullCloudUploads(render);
+      }, () => { finish(); pullCloudUploads(render); });
     } else if (CLOUD) {
-      pullCloudUploads(finish);
+      finish();
+      pullCloudUploads(render);
     } else if (location.protocol.indexOf("http") === 0) {
       fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); finish(); }).catch(finish);
     } else { finish(); }
