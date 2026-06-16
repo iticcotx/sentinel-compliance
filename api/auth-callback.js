@@ -8,17 +8,25 @@ function esc(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": 
 function page(title, body) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <body style="font-family:system-ui,Segoe UI,Arial;max-width:520px;margin:48px auto;padding:0 18px;color:#0f172a">
-<h2 style="color:#0f766e">${title}</h2>${body}<p><a href="/api/auth-login">Try sign-in again</a></p></body>`;
+<h2 style="color:#0f766e">${title}</h2>${body}<p><a href="/api/auth-callback">Try sign-in again</a></p></body>`;
 }
 
 module.exports = async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const code = url.searchParams.get("code");
   const err = url.searchParams.get("error_description") || url.searchParams.get("error");
-  if (err || !code) { res.setHeader("Content-Type", "text/html"); res.status(200).send(page("Sign-in didn’t complete", "<p>" + (err || "No authorization code returned.") + "</p>")); return; }
-
   const tenant = process.env.MS_TENANT_ID, cid = process.env.MS_CLIENT_ID, sec = process.env.MS_CLIENT_SECRET;
   const redirect = "https://sentinel-compliance-kappa.vercel.app/api/auth-callback";
+
+  // No code and no error => this is the START of sign-in: redirect to Microsoft.
+  if (!code && !err) {
+    if (!tenant || !cid) { res.status(500).send("Auth not configured."); return; }
+    const p = new URLSearchParams({ client_id: cid, response_type: "code", redirect_uri: redirect, response_mode: "query", scope: "openid profile email User.Read", prompt: "select_account" });
+    res.writeHead(302, { Location: "https://login.microsoftonline.com/" + tenant + "/oauth2/v2.0/authorize?" + p.toString() });
+    res.end(); return;
+  }
+  if (err || !code) { res.setHeader("Content-Type", "text/html"); res.status(200).send(page("Sign-in didn’t complete", "<p>" + (err || "No authorization code returned.") + "</p>")); return; }
+
   try {
     const r = await fetch("https://login.microsoftonline.com/" + tenant + "/oauth2/v2.0/token", {
       method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },

@@ -72,11 +72,10 @@
   function isWatched(id) { return OVERLAY.watch.indexOf(id) >= 0; }
   function toggleWatch(id) { const i = OVERLAY.watch.indexOf(id); if (i >= 0) OVERLAY.watch.splice(i, 1); else OVERLAY.watch.push(id); saveOverlay(); }
 
-  // ---------- Cloud (Supabase) — active only when supabase-config.js is filled ----------
-  const CLOUD = !!(window.SUPA && window.SUPA.url && window.SUPA.anon);
-  let SB = null, _syncT = null;
-  if (CLOUD && window.supabase) { try { SB = window.supabase.createClient(window.SUPA.url, window.SUPA.anon); } catch (e) { } }
-  function cloudSyncOverlay() { if (!(CLOUD && SB)) return; clearTimeout(_syncT); _syncT = setTimeout(() => { try { SB.from("app_state").upsert({ id: "overlay", data: OVERLAY }).then(() => {}, () => {}); } catch (e) {} }, 800); }
+  // ---------- Cloud — active when signed in via Microsoft (overlay stored in OneDrive, no Supabase) ----------
+  const CLOUD = !!window.SENTINEL_AUTH;
+  let _syncT = null;
+  function cloudSyncOverlay() { if (!CLOUD) return; clearTimeout(_syncT); _syncT = setTimeout(() => { try { fetch("/api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(OVERLAY) }).catch(() => {}); } catch (e) {} }, 800); }
 
   function loadJSON(k, d) { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || "{}")); } catch (e) { return d; } }
   function saveOverlay() { localStorage.setItem(OVERLAY_KEY, JSON.stringify(OVERLAY)); cloudSyncOverlay(); }
@@ -276,14 +275,11 @@
     // Render IMMEDIATELY from the loaded roster — never block the screen on a network call.
     // Saved edits (Supabase) and document badges (Microsoft) load in the background and re-render.
     render(); handleDeepLink();
-    if (CLOUD && SB) {
-      try {
-        SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
-          if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, res.data.data); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); render(); }
-        }, () => {});
-      } catch (e) {}
-      pullCloudUploads(render);
-    } else if (CLOUD) {
+    if (CLOUD) {
+      // Saved edits/notes/verify marks live in OneDrive now (no Supabase). Best-effort, background.
+      fetch("/api/state").then(r => r.ok ? r.json() : null).then(d => {
+        if (d && Object.keys(d).length) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, d); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); render(); }
+      }).catch(() => {});
       pullCloudUploads(render);
     } else if (location.protocol.indexOf("http") === 0) {
       fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); render(); }).catch(() => {});
