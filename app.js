@@ -905,7 +905,7 @@
         if (hash(code) !== CFG.tabHashes[s]) { $("#emMsg").textContent = "Wrong access code for the " + s + " tab."; return; }
       }
       closeModal(); toast("Sending email to imadaijaz2000@gmail.com…");
-      const endpoint = CLOUD ? "/api/send" : "http://localhost:8765/api/send-digest";
+      const endpoint = CLOUD ? "/api/digest" : "http://localhost:8765/api/send-digest";
       fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scopes: sel }) })
         .then(r => r.json())
         .then(d => toast(d.ok ? ("✓ Emailed report (" + sel.join(", ") + ")") : ("Send failed: " + (d.message || "").slice(-120))))
