@@ -273,21 +273,21 @@
     buildData();
     initShell();
     if (CLOUD) document.body.classList.add("cloud");
-    const finish = () => { render(); handleDeepLink(); };
+    // Render IMMEDIATELY from the loaded roster — never block the screen on a network call.
+    // Saved edits (Supabase) and document badges (Microsoft) load in the background and re-render.
+    render(); handleDeepLink();
     if (CLOUD && SB) {
-      // Show the dashboard as soon as overlay loads; fetch document badges (scan + uploads
-      // map — the slow Microsoft calls) in the BACKGROUND and re-render when ready.
-      SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
-        if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, res.data.data); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); }
-        finish();
-        pullCloudUploads(render);
-      }, () => { finish(); pullCloudUploads(render); });
+      try {
+        SB.from("app_state").select("data").eq("id", "overlay").maybeSingle().then(res => {
+          if (res && res.data && res.data.data) { OVERLAY = Object.assign({ edits: {}, added: [], deleted: [], logs: {}, watch: [], audit: [], leads: {}, tasks: {}, snapshots: {}, verified: {} }, res.data.data); if (!OVERLAY.verified) OVERLAY.verified = {}; buildData(); render(); }
+        }, () => {});
+      } catch (e) {}
+      pullCloudUploads(render);
     } else if (CLOUD) {
-      finish();
       pullCloudUploads(render);
     } else if (location.protocol.indexOf("http") === 0) {
-      fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); finish(); }).catch(finish);
-    } else { finish(); }
+      fetch("/api/uploads").then(r => r.json()).then(u => { applyUploads(u); render(); }).catch(() => {});
+    }
   }
 
   // ---- Live sync of documents: QR uploads + files dropped straight into OneDrive ----
