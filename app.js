@@ -597,13 +597,14 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all items in this group">' : "") +
         '<div class="avatar" style="' + (isProvider ? "" : "background:linear-gradient(135deg,#6366f1,#4f46e5)") + '">' + (isProvider ? esc(initials) : '<svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg>') + '</div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + testTag + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn pemail-btn" title="Email this provider (to their email)" style="padding:5px 10px">✉ Email provider</button><button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : "") + '<span class="worst-dot bg-' + worst + '"></span></div>' +
+        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn pemail-btn" title="Email this provider (to their email)" style="padding:5px 10px">✉ Email provider</button><button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : '<button class="icon-btn gemail-btn" title="Email me this group\'s report" style="padding:5px 10px">✉ Email</button>') + '<span class="worst-dot bg-' + worst + '"></span></div>' +
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 6l6 6-6 6"/></svg>';
       head.onclick = () => { state.openGroups[name] = !open; renderContent(); };
       g.appendChild(head);
       const bb = head.querySelector(".binder-btn"); if (bb) bb.onclick = (e) => { e.stopPropagation(); printBinder(name); };
       const pb = head.querySelector(".portal-btn"); if (pb) pb.onclick = (e) => { e.stopPropagation(); openProviderPortal(items[0].entityKey, name); };
       const peb = head.querySelector(".pemail-btn"); if (peb) peb.onclick = (e) => { e.stopPropagation(); openEmailTemplate(items[0]); };
+      const geb = head.querySelector(".gemail-btn"); if (geb) geb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(name, items); };
       wireGroupCheck(head, items);
       const body = el("div", "group-body");
       sortItems(items).forEach(it => body.appendChild(itemRow(it)));
@@ -630,8 +631,9 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all in this facility">' : "") +
         '<div class="avatar"><svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg></div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (fi + 1) + '.</span> ' + esc(f) + '</div><div class="g-meta">' + items.length + ' licenses & certificates · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + ' ' + k + '</span>').join("") + '<button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button></div>';
+        '<div class="mini-stats">' + ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + ' ' + k + '</span>').join("") + '<button class="icon-btn gemail-btn" title="Email me this facility\'s report" style="padding:5px 10px">✉ Email</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button></div>';
       const bb = head.querySelector(".binder-btn"); if (bb) bb.onclick = (e) => { e.stopPropagation(); printBinder(f); };
+      const ge = head.querySelector(".gemail-btn"); if (ge) ge.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(f, items); };
       wireGroupCheck(head, items);
       card.appendChild(head);
       const body = el("div", "group-body");
@@ -973,6 +975,27 @@
       '<div style="font-size:13px;color:#0f172a;margin-bottom:8px">📲 Scan this code to upload your document right from your phone:</div>' +
       '<img src="' + qr + '" alt="Upload QR code" width="180" height="180" style="border:1px solid #e6ebf1;border-radius:10px;padding:6px;background:#fff">' +
       '<div style="font-size:12px;color:#64748b;margin-top:6px">or open: <a href="' + url + '">' + url + '</a></div></div>';
+  }
+
+  // Email a single group's (facility / other / provider) compliance report to the SIGNED-IN user.
+  function emailGroupToSelf(title, items) {
+    const inbox = (window.SENTINEL_AUTH && window.SENTINEL_AUTH.email) || "your inbox";
+    const rows = sortItems(items).map(it => {
+      const st = computeStatus(it);
+      const c = st.key === "expired" ? "#dc2626" : st.key === "critical" ? "#ea580c" : st.key === "due" ? "#ca8a04" : "#0d9488";
+      return '<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">' + esc(it.category) + '</td>' +
+        '<td style="padding:6px 10px;border-bottom:1px solid #eee">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + '</td>' +
+        '<td style="padding:6px 10px;border-bottom:1px solid #eee;color:' + c + ';font-weight:700">' + st.label + '</td>' +
+        '<td style="padding:6px 10px;border-bottom:1px solid #eee">' + (it.isFile ? "on file" : "—") + '</td></tr>';
+    }).join("");
+    const html = '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#0f172a"><h2 style="color:#0f766e">' + esc(title) + ' — compliance report</h2>' +
+      '<table style="border-collapse:collapse;width:100%"><thead><tr style="text-align:left;color:#475569;font-size:12px;text-transform:uppercase"><th style="padding:6px 10px">Item</th><th style="padding:6px 10px">Expires</th><th style="padding:6px 10px">Status</th><th style="padding:6px 10px">Proof</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    toast("Sending report to " + inbox + "…");
+    const endpoint = CLOUD ? "/api/send-template" : "http://localhost:8765/api/send-template";
+    fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subject: title + " — compliance report", html: html }) })
+      .then(r => r.json())
+      .then(d => toast(d.ok ? ("✓ Report emailed to " + (d.to || inbox)) : ("Send failed: " + (d.message || "").slice(-120))))
+      .catch(() => toast(CLOUD ? "Email function error." : "Run via Start-Sentinel.bat to send locally."));
   }
 
   function openEmailTemplate(it) {
