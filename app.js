@@ -660,9 +660,12 @@
       '<div class="item-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + (st.startBy && st.key !== "good" && st.key !== "permanent" ? '<small>renew by ' + fmtD(st.startBy.toISOString().slice(0, 10)) + '</small>' : "") + '</div>' +
       '<div class="countdown s-' + st.key + '" style="background:none;border:none;padding:0">' + countdownText(st) + '</div>' +
       '<div class="status-badge s-' + st.key + '">' + st.label + '</div>' +
+      (it.scope !== "provider" ? '<button class="star irowmail" title="Email me this item" style="font-size:15px">✉</button>' : "") +
       '<button class="star' + (isWatched(it.id) ? " on" : "") + '" title="Watch this item">' + (isWatched(it.id) ? "★" : "☆") + '</button>';
-    const star = row.querySelector(".star");
+    const star = row.querySelector(".star:last-child");
     star.onclick = (e) => { e.stopPropagation(); toggleWatch(it.id); render(); };
+    const irm = row.querySelector(".irowmail");
+    if (irm) irm.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(it.entity + " — " + it.category, [it]); };
     const cb = row.querySelector(".row-check");
     if (cb) cb.onclick = (e) => { e.stopPropagation(); if (state.selection.has(it.id)) state.selection.delete(it.id); else state.selection.add(it.id); renderContent(); };
     row.onclick = () => { if (state.selectMode) { if (state.selection.has(it.id)) state.selection.delete(it.id); else state.selection.add(it.id); renderContent(); } else openDrawer(it, false); };
@@ -1458,8 +1461,9 @@
       openModal("Scan to upload a document",
         '<div style="text-align:center"><img src="' + qr + '" alt="QR code" style="width:240px;height:240px;border-radius:12px;border:1px solid var(--hair);background:#fff;padding:8px">' +
         '<div style="margin-top:12px;font-weight:700">' + esc(it.category) + '</div><div class="item-sub">' + esc(it.entity) + '</div>' +
-        '<div class="item-sub" style="margin-top:12px;max-width:340px;margin:12px auto 0">Scan from <b>any</b> phone, anywhere. Choose or photograph the document — it’s stored securely in the cloud and attaches here.</div>' +
-        '<div class="item-sub" style="margin-top:10px;word-break:break-all;opacity:.8">' + esc(url) + '</div></div>');
+        '<div class="item-sub" style="margin-top:12px;max-width:340px;margin:12px auto 0">Scan from <b>any</b> phone, anywhere — or use the link below if you can’t scan. Choose or photograph the document; it’s stored securely and attaches here.</div>' +
+        '<div class="item-sub" style="margin-top:10px"><b>Or open this link:</b></div>' +
+        '<div class="item-sub" style="margin-top:4px;word-break:break-all"><a href="' + url + '" target="_blank" rel="noopener">' + esc(url) + '</a></div></div>');
       return;
     }
     toast("Building QR…");
@@ -1471,7 +1475,8 @@
         '<div style="text-align:center"><img src="' + qr + '" alt="QR code" style="width:240px;height:240px;border-radius:12px;border:1px solid var(--hair);background:#fff;padding:8px">' +
         '<div style="margin-top:12px;font-weight:700">' + esc(it.category) + '</div><div class="item-sub">' + esc(it.entity) + '</div>' +
         '<div class="item-sub" style="margin-top:12px;max-width:340px;margin-left:auto;margin-right:auto">Scan with your phone, then choose or photograph the document. It saves straight into this item’s folder and attaches here.</div>' +
-        '<div class="item-sub" style="margin-top:10px;word-break:break-all;opacity:.8">' + esc(uploadURL) + '</div>' +
+        '<div class="item-sub" style="margin-top:10px"><b>Or open this link:</b></div>' +
+        '<div class="item-sub" style="margin-top:4px;word-break:break-all"><a href="' + uploadURL + '" target="_blank" rel="noopener">' + esc(uploadURL) + '</a></div>' +
         '<div class="item-sub" style="margin-top:8px">Phone must be on the same Wi-Fi as this PC. If it won’t connect, allow Python through the Windows firewall.</div></div>');
     }).catch(() => openModal("QR code", '<div class="empty"><h3>Start the service</h3><p>Open Sentinel via <b>Start-Sentinel.bat</b> so the QR can be generated and your phone can reach the upload page.</p></div>'));
   }
