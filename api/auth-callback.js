@@ -16,7 +16,8 @@ module.exports = async (req, res) => {
   const code = url.searchParams.get("code");
   const err = url.searchParams.get("error_description") || url.searchParams.get("error");
   const tenant = process.env.MS_TENANT_ID, cid = process.env.MS_CLIENT_ID, sec = process.env.MS_CLIENT_SECRET;
-  const redirect = "https://sentinel-compliance-kappa.vercel.app/api/auth-callback";
+  // Derive the redirect from the request host so this works on ANY domain (no hardcoding).
+  const redirect = "https://" + (req.headers.host || "sentinel-compliance-kappa.vercel.app") + "/api/auth-callback";
 
   // No code and no error => this is the START of sign-in: redirect to Microsoft.
   if (!code && !err) {
