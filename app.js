@@ -443,6 +443,10 @@
       c.onclick = () => { state.status = state.status === k ? "" : k; render(); };
       g.appendChild(c);
     });
+    if (!kpiAnimated && s.total) {
+      kpiAnimated = true;
+      requestAnimationFrame(() => g.querySelectorAll(".k-val").forEach(e => countUp(e, parseInt(e.textContent, 10) || 0)));
+    }
   }
 
   function renderAlert() {
@@ -607,6 +611,27 @@
   const PHASE_OF = {}; SOP_PHASES.forEach(([, cats], i) => cats.forEach(cat => PHASE_OF[cat] = i));
   const SECTION_OF = {}; STATE_SECTIONS.forEach(([, cats], i) => cats.forEach(cat => SECTION_OF[cat] = i));
 
+  // --- UI/UX helpers: compliance ring, animated counters, section jump-nav ---
+  let kpiAnimated = false;
+  function miniRing(score) {
+    const r = 15, c = 2 * Math.PI * r, off = c * (1 - score / 100);
+    const col = score >= 85 ? "var(--st-good)" : score >= 60 ? "var(--st-due)" : "var(--st-critical)";
+    return '<div class="ring-mini" title="Compliance score ' + score + '%">' +
+      '<svg width="42" height="42" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--hair)" stroke-width="4"/>' +
+      '<circle class="ring-fill" cx="20" cy="20" r="15" fill="none" stroke="' + col + '" stroke-width="4" stroke-linecap="round" transform="rotate(-90 20 20)" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" style="--circ:' + c.toFixed(1) + '"/></svg>' +
+      '<span class="ring-num" style="color:' + col + '">' + score + '</span></div>';
+  }
+  function phaseId(key) { return "ph-" + String(key).replace(/[^a-z0-9]+/gi, "-").toLowerCase(); }
+  function jumpToPhase(key) {
+    state.openPhases[key] = true; renderContent();
+    requestAnimationFrame(() => { const e = document.getElementById(phaseId(key)); if (e) e.scrollIntoView({ behavior: "smooth", block: "center" }); });
+  }
+  function countUp(node, to) {
+    const dur = 750, t0 = Date.now();
+    node.textContent = "0";
+    (function step() { const p = Math.min(1, (Date.now() - t0) / dur); node.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); })();
+  }
+
   // Render rows under COLLAPSIBLE sub-headings (dropdowns), in fixed order. Each section
   // shows its count + status pills even while collapsed, so nothing is hidden at a glance;
   // empty sections are greyed and non-clickable so the full taxonomy stays visible.
@@ -615,19 +640,41 @@
     const buckets = order.map(() => []);
     const extra = [];
     items.forEach(it => { const i = ofMap[it.category]; if (i == null) extra.push(it); else buckets[i].push(it); });
-    const emit = (label, list) => {
+    const sections = order.map(([label], i) => ({ label, list: buckets[i] }));
+    if (extra.length) sections.push({ label: otherLabel || "Other", list: extra });
+    const worstOf = list => list.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0];
+
+    // sticky jump-nav across the sections that actually hold documents
+    const filled = sections.filter(s => s.list.length);
+    if (filled.length > 1) {
+      const nav = el("div", "sec-nav");
+      filled.forEach(s => {
+        const key = (groupKey || "") + "||" + s.label;
+        const chip = el("button", "sec-chip wb-" + worstOf(s.list));
+        chip.innerHTML = '<span class="dot"></span>' + esc(s.label.replace(/\.$/, "")) + '<span class="sec-chip-n">' + s.list.length + '</span>';
+        chip.onclick = (e) => { e.stopPropagation(); jumpToPhase(key); };
+        nav.appendChild(chip);
+      });
+      body.appendChild(nav);
+    }
+
+    sections.forEach(({ label, list }) => {
       const n = list.length;
       const key = (groupKey || "") + "||" + label;
       const open = n ? !!state.openPhases[key] : false;
       const gs = n ? statsFor(list) : null;
-      const worst = n ? list.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] : "";
+      const worst = n ? worstOf(list) : "";
+      const valid = gs ? (gs.good + gs.permanent) : 0;
+      const pct = n ? Math.round(100 * valid / n) : 0;
       const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k])
         .map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
       const h = el("div", "phase-head" + (n ? " has-items wb-" + worst : " empty") + (open ? " open" : ""));
+      if (n) h.id = phaseId(key);
       h.innerHTML =
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         '<span class="phase-name">' + esc(label) + '</span>' +
-        '<span class="phase-line"></span>' +
+        (n ? '<span class="phase-prog" title="' + valid + ' of ' + n + ' current"><span class="phase-fill" style="width:' + pct + '%"></span></span>'
+           : '<span class="phase-line"></span>') +
         '<span class="phase-pills">' + pills + '</span>' +
         '<span class="phase-count">' + n + '</span>';
       if (n) h.onclick = () => { state.openPhases[key] = !open; renderContent(); };
@@ -635,9 +682,7 @@
       const pb = el("div", "phase-body" + (open ? " open" : ""));
       sortItems(list).forEach(it => pb.appendChild(itemRow(it)));
       body.appendChild(pb);
-    };
-    order.forEach(([label], i) => emit(label, buckets[i]));
-    if (extra.length) emit(otherLabel || "Other", extra);
+    });
   }
 
   // grouped (provider / other-by-facility)
@@ -660,7 +705,7 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all items in this group">' : "") +
         '<div class="avatar" style="' + (isProvider ? "" : "background:linear-gradient(135deg,#6366f1,#4f46e5)") + '">' + (isProvider ? esc(initials) : '<svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg>') + '</div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (gi + 1) + '.</span> ' + esc(name) + testTag + inactiveTag + rosterNote + '</div><div class="g-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + pills + (isProvider ? '<button class="icon-btn pemail-btn" title="Email this provider (to their email)" style="padding:5px 10px">✉ Email provider</button><button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : '<button class="icon-btn gemail-btn" title="Email me this group\'s report" style="padding:5px 10px">✉ Email</button>') + '<span class="worst-dot bg-' + worst + '"></span></div>' +
+        '<div class="mini-stats">' + miniRing(gs.score) + pills + (isProvider ? '<button class="icon-btn pemail-btn" title="Email this provider (to their email)" style="padding:5px 10px">✉ Email provider</button><button class="icon-btn portal-btn" title="Provider self-service portal (QR / link)" style="padding:5px 10px">🔗 Portal</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button>' : '<button class="icon-btn gemail-btn" title="Email me this group\'s report" style="padding:5px 10px">✉ Email</button>') + '<span class="worst-dot bg-' + worst + '"></span></div>' +
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M9 6l6 6-6 6"/></svg>';
       head.onclick = () => { state.openGroups[name] = !open; renderContent(); };
       g.appendChild(head);
@@ -695,7 +740,7 @@
       head.innerHTML = (state.selectMode ? '<input type="checkbox" class="row-check grp-check" title="Select all in this facility">' : "") +
         '<div class="avatar"><svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' + ICONS.building + '</svg></div>' +
         '<div><div class="g-name"><span style="opacity:.55">' + (fi + 1) + '.</span> ' + esc(f) + '</div><div class="g-meta">' + items.length + ' licenses & certificates · health ' + gs.score + '</div></div>' +
-        '<div class="mini-stats">' + ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + ' ' + k + '</span>').join("") + '<button class="icon-btn gemail-btn" title="Email me this facility\'s report" style="padding:5px 10px">✉ Email</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button></div>';
+        '<div class="mini-stats">' + miniRing(gs.score) + ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + ' ' + k + '</span>').join("") + '<button class="icon-btn gemail-btn" title="Email me this facility\'s report" style="padding:5px 10px">✉ Email</button><button class="icon-btn binder-btn" title="Print survey-ready binder" style="padding:5px 10px">🗂 Binder</button></div>';
       const bb = head.querySelector(".binder-btn"); if (bb) bb.onclick = (e) => { e.stopPropagation(); printBinder(f); };
       const ge = head.querySelector(".gemail-btn"); if (ge) ge.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(f, items); };
       wireGroupCheck(head, items);
