@@ -664,8 +664,6 @@
       const open = n ? !!state.openPhases[key] : false;
       const gs = n ? statsFor(list) : null;
       const worst = n ? worstOf(list) : "";
-      const valid = gs ? (gs.good + gs.permanent) : 0;
-      const pct = n ? Math.round(100 * valid / n) : 0;
       const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k])
         .map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
       const h = el("div", "phase-head" + (n ? " has-items wb-" + worst : " empty") + (open ? " open" : ""));
@@ -673,8 +671,7 @@
       h.innerHTML =
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         '<span class="phase-name">' + esc(label) + '</span>' +
-        (n ? '<span class="phase-prog" title="' + valid + ' of ' + n + ' current"><span class="phase-fill" style="width:' + pct + '%"></span></span>'
-           : '<span class="phase-line"></span>') +
+        '<span class="phase-line"></span>' +
         '<span class="phase-pills">' + pills + '</span>' +
         '<span class="phase-count">' + n + '</span>';
       if (n) h.onclick = () => { state.openPhases[key] = !open; renderContent(); };

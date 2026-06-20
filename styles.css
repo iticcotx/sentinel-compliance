@@ -234,16 +234,13 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 [data-theme="dark"] .phase-head.open { background:linear-gradient(180deg,rgba(20,184,166,.12),transparent); }
 @media print { .phase-body { display:block !important; } .phase-head.empty { display:none; } .phase-head .chev { display:none; } }
 
-/* per-section progress bar (valid / total) inside the sub-tab */
-.phase-head .phase-prog { position:relative; flex:1; height:6px; min-width:24px; border-radius:4px; background:var(--hair); overflow:hidden; }
-.phase-head .phase-fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px;
-  background:linear-gradient(90deg,var(--teal-500),var(--teal-600)); animation:fillbar .85s cubic-bezier(.2,.7,.2,1) both; }
-@keyframes fillbar { from { width:0 } }
-
-/* compliance ring in entity / facility headers */
-.ring-mini { position:relative; width:42px; height:42px; flex:0 0 auto; }
-.ring-mini svg { display:block; }
-.ring-num { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+/* compliance ring in entity / facility headers — sits on a white disc so the
+   number + arc stay readable on the colored (teal) card headers, incl. 3-digit 100 */
+.ring-mini { position:relative; width:44px; height:44px; flex:0 0 auto; border-radius:50%;
+  background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.18); }
+.ring-mini svg { display:block; width:44px; height:44px; }
+.ring-num { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:12.5px; font-weight:800; letter-spacing:-.5px; }
 .ring-fill { animation:ringfill .9s cubic-bezier(.2,.7,.2,1) both; }
 @keyframes ringfill { from { stroke-dashoffset:var(--circ) } }
 
