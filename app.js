@@ -489,7 +489,7 @@
     tb.innerHTML =
       '<div class="search big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' +
       '<input id="q" type="search" name="sf-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Search this tab — provider, document, license #, file name…" value="' + esc(state.search) + '">' +
-      (state.search ? '<button id="qClear" class="q-clear" title="Clear search">×</button>' : '') + '</div>' +
+      '<button id="qClear" class="q-clear" title="Clear search"' + (state.search ? '' : ' style="display:none"') + '>×</button></div>' +
       '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "status") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
       (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
@@ -500,8 +500,8 @@
       '</div>' +
       '<button class="icon-btn" id="addBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add item</button>';
     $("#q").addEventListener("focus", function () { this.removeAttribute("readonly"); }, { once: true });
-    $("#q").oninput = e => { state.search = e.target.value; renderContent(); };
-    if ($("#qClear")) $("#qClear").onclick = () => { state.search = ""; renderToolbar(); renderContent(); $("#q") && $("#q").focus(); };
+    $("#q").oninput = e => { state.search = e.target.value; $("#qClear").style.display = e.target.value ? "" : "none"; renderContent(); };
+    $("#qClear").onclick = () => { state.search = ""; $("#q").value = ""; $("#qClear").style.display = "none"; renderContent(); $("#q").focus(); };
     $("#sortF").onchange = e => { state.sort = e.target.value; renderContent(); };
     $("#catF").onchange = e => { state.category = e.target.value; renderContent(); };
     if ($("#facF")) $("#facF").onchange = e => { state.facility = e.target.value; renderContent(); };
