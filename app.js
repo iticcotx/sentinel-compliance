@@ -556,9 +556,7 @@
     if (state.view === "calendar") renderCalendar(body, arr);
     else if (!arr.length) body.innerHTML = emptyView();
     else if (state.view === "timeline") body.appendChild(renderTimeline(arr));
-    else if (state.tab === "provider") renderGrouped(body, arr, "entity", true);
-    else if (state.tab === "facility") renderFacility(body, arr);
-    else renderGrouped(body, arr, "entity", false);
+    else renderHierarchy(body, arr, state.tab);
     c.appendChild(body);
   }
 
@@ -747,6 +745,135 @@
       card.appendChild(body);
       c.appendChild(card);
     });
+  }
+
+  // ===== Flip hierarchy: square tiles, drill-down (entity -> section -> docs) =====
+  function subgroupsFor(tab) {
+    if (tab === "provider") return { order: SOP_PHASES, of: PHASE_OF, other: "Other documents" };
+    if (tab === "facility") return { order: STATE_SECTIONS, of: SECTION_OF, other: "Other licenses" };
+    return null;
+  }
+  function navigate(drill) { state.drill = drill; state._flip = true; renderContent(); }
+  function worstKey(items) { return items.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] || "none"; }
+  function initials(name) { return name.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
+
+  function entityTile(name, items, tab) {
+    const gs = statsFor(items);
+    const isProv = tab === "provider";
+    const t = el("div", "tile s-" + worstKey(items));
+    const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
+      : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
+    const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
+    const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
+    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + icon + miniRing(gs.score) + '</div>' +
+      '<div class="tile-nm">' + esc(name) + test + '</div><div class="tile-meta">' + items.length + ' tracked items</div>' +
+      (pills ? '<div class="tile-pills">' + pills + '</div>' : "");
+    t.onclick = () => navigate([name]);
+    return t;
+  }
+  function sectionTile(label, items, entity) {
+    const n = items.length;
+    const gs = n ? statsFor(items) : null;
+    const t = el("div", "tile sec s-" + (n ? worstKey(items) : "none") + (n ? "" : " empty"));
+    const num = (label.match(/^\d+/) || [""])[0];
+    const nameOnly = label.replace(/^\d+\.\s*/, "");
+    const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
+    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + (num ? '<div class="tile-num">' + num + '</div>' : '<div class="tile-ic"></div>') +
+      '<span class="tile-count">' + n + '</span></div>' +
+      '<div class="tile-nm">' + esc(nameOnly) + '</div>' + (pills ? '<div class="tile-pills">' + pills + '</div>' : (n ? "" : '<div class="tile-meta">empty</div>'));
+    if (n) t.onclick = () => navigate([entity, label]); else t.classList.add("disabled");
+    return t;
+  }
+  function docTile(it) {
+    const s = computeStatus(it);
+    const t = el("div", "tile doc s-" + s.key);
+    const sub = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
+    const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>' : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : "");
+    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' +
+      '<span class="status-badge s-' + s.key + '">' + s.label + '</span></div>' +
+      '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
+      '<div class="tile-foot">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + " " + proof + '</div>';
+    t.onclick = () => openDrawer(it, false);
+    return t;
+  }
+  function entityHeader(name, items, tab) {
+    const gs = statsFor(items);
+    const isProv = tab === "provider";
+    const wrap = el("div", "ent-head glass");
+    wrap.innerHTML = '<div class="ent-ic">' + (isProv ? esc(initials(name)) : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:20px;height:20px">' + ICONS.building + '</svg>') + '</div>' +
+      '<div class="ent-info"><div class="ent-nm">' + esc(name) + '</div><div class="ent-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
+      miniRing(gs.score) +
+      '<div class="ent-actions">' + (isProv
+        ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>'
+        : '<button class="icon-btn" data-a="email">✉ Email</button><button class="icon-btn" data-a="binder">🗂 Binder</button>') + '</div>';
+    const it0 = items[0] || {};
+    const bind = (a, fn) => { const b = wrap.querySelector('[data-a="' + a + '"]'); if (b) b.onclick = fn; };
+    bind("pemail", () => openEmailTemplate(it0));
+    bind("portal", () => openProviderPortal(it0.entityKey, name));
+    bind("binder", () => printBinder(name));
+    bind("email", () => emailGroupToSelf(name, items));
+    return wrap;
+  }
+  function renderHierarchy(c, arr, tab) {
+    if (!state.drill || state._drillTab !== tab) { state.drill = []; state._drillTab = tab; }
+    const sg = subgroupsFor(tab);
+    const tabLabel = tab === "provider" ? "Providers" : tab === "facility" ? "Facilities" : "Operations";
+    const groups = {};
+    arr.forEach(i => (groups[i.entity] = groups[i.entity] || []).push(i));
+
+    // flow-chart breadcrumb + back
+    const trail = [tabLabel].concat(state.drill);
+    const flow = el("div", "flow");
+    if (state.drill.length) {
+      const back = el("button", "flow-back", "‹ Back");
+      back.onclick = () => navigate(state.drill.slice(0, -1));
+      flow.appendChild(back);
+    }
+    trail.forEach((label, i) => {
+      if (i) flow.insertAdjacentHTML("beforeend", '<span class="flow-arrow">→</span>');
+      const node = el("button", "flow-node" + (i === trail.length - 1 ? " active" : ""), esc(label));
+      if (i < trail.length - 1) node.onclick = () => navigate(state.drill.slice(0, i));
+      flow.appendChild(node);
+    });
+    c.appendChild(flow);
+
+    const grid = el("div", "hgrid" + (state._flip ? " flip-in" : ""));
+    state._flip = false;
+
+    if (state.drill.length === 0) {
+      Object.keys(groups).sort((a, b) => (STATUS_RANK[worstKey(groups[a])] - STATUS_RANK[worstKey(groups[b])]) || a.localeCompare(b))
+        .forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
+      if (!grid.children.length) grid.innerHTML = '<div class="hempty">No matching items.</div>';
+    } else {
+      const entity = state.drill[0];
+      const items = groups[entity] || [];
+      c.appendChild(entityHeader(entity, items, tab));
+      if (state.drill.length === 1 && sg) {
+        const buckets = sg.order.map(() => []); const extra = [];
+        items.forEach(it => { const idx = sg.of[it.category]; if (idx == null) extra.push(it); else buckets[idx].push(it); });
+        sg.order.forEach(([label], idx) => grid.appendChild(sectionTile(label, buckets[idx], entity)));
+        if (extra.length) grid.appendChild(sectionTile(sg.other, extra, entity));
+      } else {
+        let docs = items;
+        if (sg && state.drill.length === 2) {
+          const secLabel = state.drill[1];
+          docs = items.filter(it => { const idx = sg.of[it.category]; return (idx == null ? sg.other : sg.order[idx][0]) === secLabel; });
+        }
+        sortItems(docs).forEach(it => grid.appendChild(docTile(it)));
+        if (!docs.length) grid.innerHTML = '<div class="hempty">No documents here yet.</div>';
+      }
+    }
+    c.appendChild(grid);
+
+    if (!window.__hescBound) {
+      window.__hescBound = true;
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        const dr = $("#drawer"); if (dr && dr.getAttribute("aria-hidden") === "false") return;
+        const md = $("#modal"); if (md && getComputedStyle(md).display !== "none") return;
+        if (state.drill && state.drill.length) { e.preventDefault(); navigate(state.drill.slice(0, -1)); }
+      });
+    }
   }
 
   function itemRow(it) {
