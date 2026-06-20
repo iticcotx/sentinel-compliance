@@ -1,7 +1,7 @@
 // Opens a Microsoft Graph upload session in the item's OneDrive folder (app-only).
 // The browser then PUTs the file bytes straight to the returned uploadUrl, so large
 // phone photos never hit Vercel's request-size limit.
-const { accessToken, drivePath, encPath, driveRoot, ensureFolder } = require("../lib/graph");
+const { accessToken, drivePath, encPath, driveRoot, ensureFolder, docsRoot, docsPathFromUrl, ensureFolderIn } = require("../lib/graph");
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,10 +16,14 @@ module.exports = async (req, res) => {
     if (!folder) { res.status(400).json({ ok: false, message: "missing folder" }); return; }
 
     const token = await accessToken();
-    const folderPath = drivePath(folder);
-    await ensureFolder(token, folderPath);
+    // Decoupled: absolute SharePoint URLs land in the new docs library; legacy
+    // relative paths still resolve to the OneDrive ROOT.
+    const docsPath = docsPathFromUrl(folder);
+    let rootUrl, folderPath;
+    if (docsPath != null) { rootUrl = docsRoot(); folderPath = docsPath; await ensureFolderIn(token, rootUrl, folderPath); }
+    else { rootUrl = driveRoot(); folderPath = drivePath(folder); await ensureFolder(token, folderPath); }
     const filePath = folderPath + "/Sentinel_Upload_" + name;
-    const r = await fetch(driveRoot() + "/root:/" + encPath(filePath) + ":/createUploadSession", {
+    const r = await fetch(rootUrl + "/root:/" + encPath(filePath) + ":/createUploadSession", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ item: { "@microsoft.graph.conflictBehavior": "rename" } })
