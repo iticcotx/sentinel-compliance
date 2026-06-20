@@ -201,17 +201,31 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; border:1px solid transparent; white-space:nowrap; }
 .group-body { display:none; padding:4px 12px 12px; }
 .group.open .group-body { display:block; }
-/* sub-headings inside a group: SOP phases (providers) / readiness sections (facilities) */
-.phase-head { display:flex; align-items:center; gap:8px; margin:14px 2px 4px;
-  font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-3); }
-.phase-head:first-child { margin-top:6px; }
+/* Collapsible sub-folders: SOP phases (providers) / readiness sections (facilities).
+   Each is a dropdown header you click to reveal its documents. */
+.phase-head { display:flex; align-items:center; gap:10px; margin:10px 2px 0; padding:9px 12px;
+  border-radius:11px; font-size:11.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink-3); transition:.15s; }
+.phase-head.has-items { cursor:pointer; background:var(--surface-solid); border:1px solid var(--hair); }
+.phase-head.has-items:hover { border-color:var(--teal-300); color:var(--ink-2); box-shadow:var(--shadow); }
+.phase-head.open { color:var(--accent); border-color:var(--teal-300); background:var(--teal-50); }
+.phase-head .chev { width:15px; height:15px; flex:0 0 auto; transition:transform .2s; opacity:.8; }
+.phase-head.open .chev { transform:rotate(90deg); }
+.phase-head.empty .chev { visibility:hidden; }
 .phase-head .phase-name { white-space:nowrap; }
-.phase-head::after { content:""; flex:1; height:1px; background:var(--hair); }
-.phase-head .phase-count { order:3; flex:0 0 auto; min-width:20px; text-align:center;
-  background:var(--hair); color:var(--ink-2); border-radius:999px; padding:1px 7px; font-size:10px; }
-.phase-head.empty { opacity:.4; }
-.phase-head.empty .phase-count { background:transparent; }
-@media print { .phase-head.empty { display:none; } }
+.phase-head .phase-line { flex:1; height:1px; background:var(--hair); min-width:10px; }
+.phase-head .phase-pills { display:flex; gap:5px; flex:0 0 auto; }
+.phase-head .phase-pills .pill { text-transform:none; letter-spacing:0; font-size:10px; padding:2px 8px; }
+.phase-head .phase-count { flex:0 0 auto; min-width:24px; text-align:center; background:var(--hair);
+  color:var(--ink-2); border-radius:999px; padding:2px 9px; font-size:10.5px; }
+.phase-head.open .phase-count { background:var(--accent); color:var(--accent-ink); }
+.phase-head.empty { opacity:.5; }
+.phase-head.empty .phase-count { background:transparent; border:1px solid var(--hair); }
+.phase-body { display:none; padding:2px 4px 4px; }
+.phase-body.open { display:block; }
+[data-theme="dark"] .phase-head.open { background:rgba(20,184,166,.10); }
+@media print { .phase-body { display:block !important; } .phase-head.empty { display:none; }
+  .phase-head .chev { display:none; } }
 /* green header for facility & other cards so white rows below stand out */
 .group-head.green { background:linear-gradient(135deg,var(--teal-600),var(--teal-700)); border-radius:18px 18px 0 0; }
 .group-head.green .g-name, .group-head.green .g-meta { color:#fff; }

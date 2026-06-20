@@ -607,17 +607,33 @@
   const PHASE_OF = {}; SOP_PHASES.forEach(([, cats], i) => cats.forEach(cat => PHASE_OF[cat] = i));
   const SECTION_OF = {}; STATE_SECTIONS.forEach(([, cats], i) => cats.forEach(cat => SECTION_OF[cat] = i));
 
-  // Render rows into `body` grouped under sub-headings, in fixed order.
-  // Empty buckets are shown greyed (so the full phase/section list stays visible).
-  function appendBucketed(body, items, order, ofMap, otherLabel) {
+  // Render rows under COLLAPSIBLE sub-headings (dropdowns), in fixed order. Each section
+  // shows its count + status pills even while collapsed, so nothing is hidden at a glance;
+  // empty sections are greyed and non-clickable so the full taxonomy stays visible.
+  function appendBucketed(body, items, order, ofMap, otherLabel, groupKey) {
+    if (!state.openPhases) state.openPhases = {};
     const buckets = order.map(() => []);
     const extra = [];
     items.forEach(it => { const i = ofMap[it.category]; if (i == null) extra.push(it); else buckets[i].push(it); });
     const emit = (label, list) => {
-      const h = el("div", "phase-head" + (list.length ? "" : " empty"));
-      h.innerHTML = '<span class="phase-name">' + esc(label) + '</span><span class="phase-count">' + list.length + '</span>';
+      const n = list.length;
+      const key = (groupKey || "") + "||" + label;
+      const open = n ? !!state.openPhases[key] : false;
+      const gs = n ? statsFor(list) : null;
+      const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k])
+        .map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
+      const h = el("div", "phase-head" + (n ? " has-items" : " empty") + (open ? " open" : ""));
+      h.innerHTML =
+        '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
+        '<span class="phase-name">' + esc(label) + '</span>' +
+        '<span class="phase-line"></span>' +
+        '<span class="phase-pills">' + pills + '</span>' +
+        '<span class="phase-count">' + n + '</span>';
+      if (n) h.onclick = () => { state.openPhases[key] = !open; renderContent(); };
       body.appendChild(h);
-      sortItems(list).forEach(it => body.appendChild(itemRow(it)));
+      const pb = el("div", "phase-body" + (open ? " open" : ""));
+      sortItems(list).forEach(it => pb.appendChild(itemRow(it)));
+      body.appendChild(pb);
     };
     order.forEach(([label], i) => emit(label, buckets[i]));
     if (extra.length) emit(otherLabel || "Other", extra);
@@ -653,7 +669,7 @@
       const geb = head.querySelector(".gemail-btn"); if (geb) geb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(name, items); };
       wireGroupCheck(head, items);
       const body = el("div", "group-body");
-      if (isProvider) appendBucketed(body, items, SOP_PHASES, PHASE_OF, "Other documents");
+      if (isProvider) appendBucketed(body, items, SOP_PHASES, PHASE_OF, "Other documents", name);
       else sortItems(items).forEach(it => body.appendChild(itemRow(it)));
       g.appendChild(body);
       c.appendChild(g);
@@ -684,7 +700,7 @@
       wireGroupCheck(head, items);
       card.appendChild(head);
       const body = el("div", "group-body");
-      appendBucketed(body, items, STATE_SECTIONS, SECTION_OF, "Other licenses");
+      appendBucketed(body, items, STATE_SECTIONS, SECTION_OF, "Other licenses", f);
       card.appendChild(body);
       c.appendChild(card);
     });
