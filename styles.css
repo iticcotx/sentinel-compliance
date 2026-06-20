@@ -288,6 +288,30 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .ent-info { min-width:0; } .ent-nm { font-size:17px; font-weight:800; } .ent-meta { font-size:12px; color:var(--ink-3); margin-top:2px; }
 .ent-actions { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
 
+/* ---- folder vs file: shape cues, no text labels ---- */
+.tile.is-folder::after { content:""; position:absolute; top:0; left:20px; width:46px; height:7px; border-radius:0 0 7px 7px; background:var(--teal-500); opacity:.85; }
+.tile.is-folder .tile-nm::after { content:" ›"; color:var(--ink-3); font-weight:800; }
+.tile.is-file::after { content:""; position:absolute; top:0; right:0; border-style:solid; border-width:0 22px 22px 0;
+  border-color:var(--bg) var(--bg) transparent transparent; }
+.tile.is-file .tile-ic { background:#eaf1fb; color:#3b6fb0; }
+[data-theme="dark"] .tile.is-file .tile-ic { background:rgba(59,111,176,.20); color:#9cc2f0; }
+.tile-det { margin-left:auto; border:none; background:transparent; color:var(--ink-3); font-size:18px; line-height:1; cursor:pointer; padding:2px 7px; border-radius:8px; flex:0 0 auto; }
+.tile-det:hover { background:var(--hair); color:var(--ink); }
+.tile.doc .tile-foot { margin-top:auto; align-items:center; }
+.tile-when { color:var(--ink-2); font-weight:600; font-size:12px; }
+.tile-open { margin-left:auto; color:var(--accent); font-weight:800; font-size:12px; }
+
+/* ---- prominent search + sort, search results header ---- */
+.search.big { flex:1 1 340px; min-width:230px; }
+.search.big input { font-size:15px; padding:12px 14px; }
+.q-clear { border:none; background:transparent; color:var(--ink-3); font-size:20px; cursor:pointer; padding:0 8px; }
+.q-clear:hover { color:var(--ink); }
+.srch-head { margin:2px 2px 12px; font-size:14px; color:var(--ink-2); }
+
+/* ---- required-field marker + error highlight (email composer) ---- */
+.req { color:var(--st-expired); font-weight:800; }
+input.err, .etf.err { border-color:var(--st-expired) !important; box-shadow:0 0 0 3px rgba(220,38,38,.16) !important; }
+
 /* sticky in-card section jump-nav */
 .sec-nav { position:sticky; top:8px; z-index:6; display:flex; gap:8px; flex-wrap:wrap; padding:10px;
   margin:4px 2px 2px; border-radius:13px; background:var(--surface); backdrop-filter:blur(12px);

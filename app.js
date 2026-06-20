@@ -150,8 +150,11 @@
       if (qv === "watch" && !isWatched(it.id)) return false;
       if ((qv === "expired" || qv === "critical" || qv === "due") && computeStatus(it).key !== qv) return false;
       if (q) {
-        const blob = (it.entity + " " + it.category + " " + (it.authority || "") + " " + (it.number || "") + " " + (it.notes || "")).toLowerCase();
-        if (!blob.includes(q)) return false;
+        let fname = "";
+        try { fname = decodeURIComponent(String(it.fileLink || "").split("/").pop() || "").replace(/[_%]/g, " "); } catch (e) { fname = String(it.fileLink || ""); }
+        const blob = (it.entity + " " + it.category + " " + (it.authority || "") + " " + (it.number || "") + " " + (it.notes || "") + " " + fname).toLowerCase();
+        // match every typed word (any order) so "driving license" finds "Driver's License"-type files
+        if (!q.split(/\s+/).filter(Boolean).every(tok => blob.includes(tok))) return false;
       }
       return true;
     });
@@ -482,9 +485,12 @@
   function renderToolbar() {
     const tb = $("#toolbar"); tb.innerHTML = "";
     const cats = [...new Set(tabItems(state.tab).map(i => i.category))].sort();
+    const sorts = [["status", "Status (worst first)"], ["expiry", "Expiry (soonest)"], ["name", "Name (A–Z)"]];
     tb.innerHTML =
-      '<div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' +
-      '<input id="q" type="search" name="sf-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Search ' + state.tab + '…" value="' + esc(state.search) + '"></div>' +
+      '<div class="search big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' +
+      '<input id="q" type="search" name="sf-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Search this tab — provider, document, license #, file name…" value="' + esc(state.search) + '">' +
+      (state.search ? '<button id="qClear" class="q-clear" title="Clear search">×</button>' : '') + '</div>' +
+      '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "status") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
       (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
       (state.tab === "provider" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
@@ -495,6 +501,8 @@
       '<button class="icon-btn" id="addBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add item</button>';
     $("#q").addEventListener("focus", function () { this.removeAttribute("readonly"); }, { once: true });
     $("#q").oninput = e => { state.search = e.target.value; renderContent(); };
+    if ($("#qClear")) $("#qClear").onclick = () => { state.search = ""; renderToolbar(); renderContent(); $("#q") && $("#q").focus(); };
+    $("#sortF").onchange = e => { state.sort = e.target.value; renderContent(); };
     $("#catF").onchange = e => { state.category = e.target.value; renderContent(); };
     if ($("#facF")) $("#facF").onchange = e => { state.facility = e.target.value; renderContent(); };
     if ($("#inact")) $("#inact").onchange = e => { state.showInactive = e.target.checked; render(); };
@@ -755,12 +763,34 @@
   }
   function navigate(drill) { state.drill = drill; state._flip = true; renderContent(); }
   function worstKey(items) { return items.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] || "none"; }
+  function earliestExp(items) { return Math.min.apply(null, items.map(i => i.expires ? parseD(i.expires) : Infinity).concat(Infinity)); }
+  function sortDocs(list) {
+    const by = state.sort || "status";
+    if (by === "name") return list.slice().sort((a, b) => (a.category || "").localeCompare(b.category || ""));
+    if (by === "expiry") return list.slice().sort((a, b) => (a.expires ? parseD(a.expires) : Infinity) - (b.expires ? parseD(b.expires) : Infinity));
+    return sortItems(list);
+  }
+  function sortedEntityNames(groups) {
+    const by = state.sort || "status", names = Object.keys(groups);
+    if (by === "name") return names.sort((a, b) => a.localeCompare(b));
+    if (by === "expiry") return names.sort((a, b) => earliestExp(groups[a]) - earliestExp(groups[b]));
+    return names.sort((a, b) => (STATUS_RANK[worstKey(groups[a])] - STATUS_RANK[worstKey(groups[b])]) || a.localeCompare(b));
+  }
   function initials(name) { return name.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
+
+  // open a proof file straight in the Microsoft 365 (Office/Outlook) web viewer
+  function fileViewerUrl(it) {
+    let raw = it.fileLink || "";
+    if (CLOUD && it.isFile && raw.indexOf("../") === 0 && !/^https?:/i.test(raw)) raw = sharePointLink(raw);
+    if (!/^https?:/i.test(raw)) return null;
+    return raw + (raw.indexOf("?") >= 0 ? "&" : "?") + "web=1";
+  }
+  function openFile(it) { const u = fileViewerUrl(it); if (u) window.open(u, "_blank", "noopener"); else openDrawer(it, false); }
 
   function entityTile(name, items, tab) {
     const gs = statsFor(items);
     const isProv = tab === "provider";
-    const t = el("div", "tile s-" + worstKey(items));
+    const t = el("div", "tile is-folder s-" + worstKey(items));
     const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
       : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
     const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
@@ -774,7 +804,7 @@
   function sectionTile(label, items, entity) {
     const n = items.length;
     const gs = n ? statsFor(items) : null;
-    const t = el("div", "tile sec s-" + (n ? worstKey(items) : "none") + (n ? "" : " empty"));
+    const t = el("div", "tile sec is-folder s-" + (n ? worstKey(items) : "none") + (n ? "" : " empty"));
     const num = (label.match(/^\d+/) || [""])[0];
     const nameOnly = label.replace(/^\d+\.\s*/, "");
     const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
@@ -784,16 +814,21 @@
     if (n) t.onclick = () => navigate([entity, label]); else t.classList.add("disabled");
     return t;
   }
-  function docTile(it) {
+  function docTile(it, showEntity) {
     const s = computeStatus(it);
-    const t = el("div", "tile doc s-" + s.key);
-    const sub = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
+    const hasFile = !!fileViewerUrl(it);
+    const t = el("div", "tile doc is-file s-" + s.key);
+    const base = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
+    const sub = showEntity ? (it.entity + (base ? " · " + base : "")) : base;
     const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>' : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : "");
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' +
-      '<span class="status-badge s-' + s.key + '">' + s.label + '</span></div>' +
+      '<button class="tile-det" title="Details, verify & history" aria-label="Details">⋯</button></div>' +
       '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
-      '<div class="tile-foot">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + " " + proof + '</div>';
-    t.onclick = () => openDrawer(it, false);
+      '<div class="tile-foot"><span class="status-badge s-' + s.key + '">' + s.label + '</span>' +
+      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + '</span>' + proof +
+      (hasFile ? '<span class="tile-open">Open ›</span>' : '') + '</div>';
+    t.querySelector(".tile-det").onclick = (e) => { e.stopPropagation(); openDrawer(it, false); };
+    t.onclick = () => hasFile ? openFile(it) : openDrawer(it, false);
     return t;
   }
   function entityHeader(name, items, tab) {
@@ -840,9 +875,19 @@
     const grid = el("div", "hgrid" + (state._flip ? " flip-in" : ""));
     state._flip = false;
 
-    if (state.drill.length === 0) {
-      Object.keys(groups).sort((a, b) => (STATUS_RANK[worstKey(groups[a])] - STATUS_RANK[worstKey(groups[b])]) || a.localeCompare(b))
-        .forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
+    const searching = (state.search || "").trim().length > 0;
+    if (searching) {
+      // Search flattens to matching DOCUMENTS within the current scope (whole tab, or the
+      // drilled-in entity) so you can find a file without knowing its folder.
+      const scoped = state.drill.length ? arr.filter(i => i.entity === state.drill[0]) : arr;
+      if (state.drill.length) c.appendChild(entityHeader(state.drill[0], groups[state.drill[0]] || [], tab));
+      const sh = el("div", "srch-head");
+      sh.innerHTML = '<b>' + scoped.length + '</b> result' + (scoped.length === 1 ? "" : "s") + ' for “' + esc(state.search) + '” in ' + esc(state.drill.length ? state.drill[0] : tabLabel);
+      c.appendChild(sh);
+      sortDocs(scoped).forEach(it => grid.appendChild(docTile(it, !state.drill.length)));
+      if (!scoped.length) grid.innerHTML = '<div class="hempty">No matches for “' + esc(state.search) + '”. Try fewer words.</div>';
+    } else if (state.drill.length === 0) {
+      sortedEntityNames(groups).forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
       if (!grid.children.length) grid.innerHTML = '<div class="hempty">No matching items.</div>';
     } else {
       const entity = state.drill[0];
@@ -859,7 +904,7 @@
           const secLabel = state.drill[1];
           docs = items.filter(it => { const idx = sg.of[it.category]; return (idx == null ? sg.other : sg.order[idx][0]) === secLabel; });
         }
-        sortItems(docs).forEach(it => grid.appendChild(docTile(it)));
+        sortDocs(docs).forEach(it => grid.appendChild(docTile(it)));
         if (!docs.length) grid.innerHTML = '<div class="hempty">No documents here yet.</div>';
       }
     }
@@ -967,17 +1012,18 @@
     const fileHref = isUrl ? raw : encodePath(raw);
     // "Open in Outlook" = open in the Microsoft 365 web (Office/OneDrive) viewer, where the user is signed in.
     const viewerHref = fileHref + (fileHref.indexOf("?") >= 0 ? "&" : "?") + "web=1";
-    const inlinePdf = /\.pdf(\?|#|$)/i.test(raw);   // local/Supabase PDFs preview inline; SharePoint viewer links don't
+    // Inline preview only works for local PDFs; SharePoint blocks cross-origin framing,
+    // so on cloud we skip the (always-blank) iframe and open straight in the M365 viewer.
+    const inlinePdf = !CLOUD && /\.pdf(\?|#|$)/i.test(raw);
     const fname = it.uploadName || (isUrl ? "" : decodeURIComponent(raw.split("/").pop()));
     const preview = inlinePdf
-      ? '<div class="pdf-frame"><div class="pdf-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">' + ICONS.doc + '</svg>If this preview stays blank, click “Open document”.</div>' +
+      ? '<div class="pdf-frame"><div class="pdf-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">' + ICONS.doc + '</svg>If this preview stays blank, click “Open file in Outlook”.</div>' +
         '<iframe src="' + fileHref + '#view=FitH&toolbar=1" title="Proof document preview" loading="lazy"></iframe></div>'
       : '';
     return '<div class="dfield"><div class="dl">Proof document</div>' +
       (fname ? '<div class="pdf-name">📄 ' + esc(fname) + '</div>' : '') + preview +
-      '<div class="doc-btns"><a class="doc-link" href="' + fileHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.doc + '</svg>Open document</a>' +
+      '<div class="doc-btns"><a class="doc-link" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open file in Outlook</a>' +
       ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
-      '<a class="doc-link ghost" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open in Outlook</a>' +
       '</div></div>';
   }
   function wireAttach(it) {
@@ -1240,7 +1286,7 @@
     const opts = Object.keys(EMAIL_TEMPLATES).map(k => '<option value="' + k + '">' + EMAIL_TEMPLATES[k].label + '</option>').join("");
     openModal("Email provider (from template)",
       '<div class="item-sub" style="margin-bottom:10px">This goes to the provider\'s email below (auto-detected — edit if needed). A scan-to-upload QR is added automatically.</div>' +
-      '<div class="dl">To — provider\'s email</div><input id="etTo" value="' + esc(it.email || "") + '" placeholder="provider@email.com" style="' + ip + ';margin-bottom:10px">' +
+      '<div class="dl">To — provider\'s email <span class="req">*</span></div><input id="etTo" value="' + esc(it.email || "") + '" placeholder="provider@email.com" style="' + ip + ';margin-bottom:10px">' +
       '<div class="dl">Template</div><select id="etSel" style="' + ip + ';margin-bottom:10px">' + opts + '</select>' +
       '<div id="etFields"></div>' +
       '<div class="dl" style="margin-top:8px">Preview</div><div id="etPrev" style="border:1px solid var(--hair);border-radius:10px;padding:12px;background:#fff;max-height:300px;overflow:auto"></div>' +
@@ -1249,7 +1295,7 @@
     const refreshPrev = () => { $("#etPrev").innerHTML = tmplToHtml(EMAIL_TEMPLATES[cur].body(vals())) + uploadQrBlock(it); };
     const drawFields = () => {
       const t = EMAIL_TEMPLATES[cur], v = t.fill(it);
-      $("#etFields").innerHTML = t.fields.map(([k, lab]) => '<div style="margin-bottom:8px"><div class="dl">' + lab + '</div><input class="etf" data-k="' + k + '" value="' + esc(v[k] || "") + '" style="' + ip + '"></div>').join("");
+      $("#etFields").innerHTML = t.fields.map(([k, lab]) => '<div style="margin-bottom:8px"><div class="dl">' + lab + ' <span class="req">*</span></div><input class="etf" data-k="' + k + '" value="' + esc(v[k] || "") + '" style="' + ip + '"></div>').join("");
       [...$("#modalInner").querySelectorAll(".etf")].forEach(i => i.oninput = refreshPrev);
       refreshPrev();
     };
@@ -1258,7 +1304,11 @@
     $("#etSend").onclick = () => {
       const t = EMAIL_TEMPLATES[cur], v = vals();
       const to = ($("#etTo").value || "").trim();
-      if (!to) { toast("Enter the provider's email first."); return; }
+      // Every field is required — flag blanks and block the send.
+      const toEl = $("#etTo"); toEl.classList.toggle("err", !to);
+      const missing = [];
+      [...$("#modalInner").querySelectorAll(".etf")].forEach(i => { const blank = !i.value.trim(); i.classList.toggle("err", blank); if (blank) missing.push(i.dataset.k); });
+      if (!to || missing.length) { toast("All fields are required — please fill the highlighted field(s)."); return; }
       const upUrl = (CLOUD ? location.origin : "https://sentinel-compliance-kappa.vercel.app") + "/upload.html?item=" + encodeURIComponent(it.id);
       const payload = { to: to, subject: t.subj(v), html: tmplToHtml(t.body(v)) + uploadQrBlock(it), text: t.body(v) + "\n\nUpload your document here: " + upUrl };
       closeModal(); toast("Sending email to " + to + "…");
