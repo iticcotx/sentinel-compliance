@@ -577,6 +577,52 @@
     gc.onclick = (e) => { e.stopPropagation(); if (allSel) ids.forEach(id => state.selection.delete(id)); else ids.forEach(id => state.selection.add(id)); renderContent(); };
   }
 
+  // --- Folder structure: 6 credentialing SOP phases (providers) and the
+  //     14 State-Readiness sections (facilities). Mirrors the Sentinel\ subfolders.
+  //     A category that maps to no bucket falls into the trailing "Other" group. ---
+  const SOP_PHASES = [
+    ["1. Application & Document Collection", ["CV / Resume", "Initial Application", "Medical Diploma", "Driver's License", "Malpractice / COI Insurance", "ACLS Certification", "ATLS Certification", "BLS Certification", "PALS Certification"]],
+    ["2. Primary Source Verification", ["State Medical License", "Medical License Verify (annual)", "Individual DEA Registration", "DEA Verify (annual)", "Board Certification", "NPI Verification"]],
+    ["3. Background & Compliance Review", ["NPDB Query (2 yrs)", "OIG / SAM Exclusion Check", "Peer References"]],
+    ["4. Medical Staff Review", ["Delineation of Privileges (DOP)"]],
+    ["5. Payer Enrollment & Facility Setup", ["TSCA Documents"]],
+    ["6. Approval & Ongoing Monitoring", ["CME (20 hrs / 2 yrs)", "Influenza Vaccination", "TB Screening"]],
+  ];
+  const STATE_SECTIONS = [
+    ["01. Licensing & Regulatory Compliance", ["Certificate of Occupancy", "Facility License", "DEA for Facility License", "DEA Power of Attorney", "NPI for Facility", "EIN for Facility"]],
+    ["02. Personnel Files & Credentialing", []],
+    ["03. Medical Staff Services", []],
+    ["04. Patient Care & Clinical Documentation", []],
+    ["05. Medication Management", ["Pharmacy License", "Consultant Pharmacist License", "Consultant Pharmacist Agreement"]],
+    ["06. Crash Cart & Emergency Equipment", []],
+    ["07. Infection Prevention & Control", []],
+    ["08. Laboratory Services", ["CLIA", "COLA", "API COP"]],
+    ["09. Radiology Services", ["Certificate of X-Ray Registration"]],
+    ["10. Quality Improvement Program", []],
+    ["11. Environment of Care", []],
+    ["12. Emergency Preparedness", []],
+    ["13. Patient Rights & Compliance", []],
+    ["14. Daily Readiness Walkthrough", []],
+  ];
+  const PHASE_OF = {}; SOP_PHASES.forEach(([, cats], i) => cats.forEach(cat => PHASE_OF[cat] = i));
+  const SECTION_OF = {}; STATE_SECTIONS.forEach(([, cats], i) => cats.forEach(cat => SECTION_OF[cat] = i));
+
+  // Render rows into `body` grouped under sub-headings, in fixed order.
+  // Empty buckets are shown greyed (so the full phase/section list stays visible).
+  function appendBucketed(body, items, order, ofMap, otherLabel) {
+    const buckets = order.map(() => []);
+    const extra = [];
+    items.forEach(it => { const i = ofMap[it.category]; if (i == null) extra.push(it); else buckets[i].push(it); });
+    const emit = (label, list) => {
+      const h = el("div", "phase-head" + (list.length ? "" : " empty"));
+      h.innerHTML = '<span class="phase-name">' + esc(label) + '</span><span class="phase-count">' + list.length + '</span>';
+      body.appendChild(h);
+      sortItems(list).forEach(it => body.appendChild(itemRow(it)));
+    };
+    order.forEach(([label], i) => emit(label, buckets[i]));
+    if (extra.length) emit(otherLabel || "Other", extra);
+  }
+
   // grouped (provider / other-by-facility)
   function renderGrouped(c, arr, key, isProvider) {
     const groups = {};
@@ -607,7 +653,8 @@
       const geb = head.querySelector(".gemail-btn"); if (geb) geb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(name, items); };
       wireGroupCheck(head, items);
       const body = el("div", "group-body");
-      sortItems(items).forEach(it => body.appendChild(itemRow(it)));
+      if (isProvider) appendBucketed(body, items, SOP_PHASES, PHASE_OF, "Other documents");
+      else sortItems(items).forEach(it => body.appendChild(itemRow(it)));
       g.appendChild(body);
       c.appendChild(g);
     });
@@ -637,7 +684,7 @@
       wireGroupCheck(head, items);
       card.appendChild(head);
       const body = el("div", "group-body");
-      sortItems(items).forEach(it => body.appendChild(itemRow(it)));
+      appendBucketed(body, items, STATE_SECTIONS, SECTION_OF, "Other licenses");
       card.appendChild(body);
       c.appendChild(card);
     });

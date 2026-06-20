@@ -201,6 +201,17 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; border:1px solid transparent; white-space:nowrap; }
 .group-body { display:none; padding:4px 12px 12px; }
 .group.open .group-body { display:block; }
+/* sub-headings inside a group: SOP phases (providers) / readiness sections (facilities) */
+.phase-head { display:flex; align-items:center; gap:8px; margin:14px 2px 4px;
+  font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-3); }
+.phase-head:first-child { margin-top:6px; }
+.phase-head .phase-name { white-space:nowrap; }
+.phase-head::after { content:""; flex:1; height:1px; background:var(--hair); }
+.phase-head .phase-count { order:3; flex:0 0 auto; min-width:20px; text-align:center;
+  background:var(--hair); color:var(--ink-2); border-radius:999px; padding:1px 7px; font-size:10px; }
+.phase-head.empty { opacity:.4; }
+.phase-head.empty .phase-count { background:transparent; }
+@media print { .phase-head.empty { display:none; } }
 /* green header for facility & other cards so white rows below stand out */
 .group-head.green { background:linear-gradient(135deg,var(--teal-600),var(--teal-700)); border-radius:18px 18px 0 0; }
 .group-head.green .g-name, .group-head.green .g-meta { color:#fff; }
