@@ -201,31 +201,38 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; border:1px solid transparent; white-space:nowrap; }
 .group-body { display:none; padding:4px 12px 12px; }
 .group.open .group-body { display:block; }
-/* Collapsible sub-folders: SOP phases (providers) / readiness sections (facilities).
-   Each is a dropdown header you click to reveal its documents. */
-.phase-head { display:flex; align-items:center; gap:10px; margin:10px 2px 0; padding:9px 12px;
-  border-radius:11px; font-size:11.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
-  color:var(--ink-3); transition:.15s; }
-.phase-head.has-items { cursor:pointer; background:var(--surface-solid); border:1px solid var(--hair); }
-.phase-head.has-items:hover { border-color:var(--teal-300); color:var(--ink-2); box-shadow:var(--shadow); }
-.phase-head.open { color:var(--accent); border-color:var(--teal-300); background:var(--teal-50); }
-.phase-head .chev { width:15px; height:15px; flex:0 0 auto; transition:transform .2s; opacity:.8; }
+/* Collapsible sub-folder TABS — thick & prominent. SOP phases (providers) /
+   readiness sections (facilities). Click a header to reveal its documents.
+   A colored left rail reflects the section's worst status at a glance. */
+.phase-head { position:relative; display:flex; align-items:center; gap:12px; margin:12px 2px 0;
+  padding:14px 16px 14px 20px; border-radius:14px; font-size:12.5px; font-weight:800;
+  letter-spacing:.04em; text-transform:uppercase; color:var(--ink-2); transition:.15s; }
+.phase-head.has-items { cursor:pointer; background:var(--surface-solid); border:1px solid var(--hair); box-shadow:0 1px 2px rgba(15,42,60,.05); }
+.phase-head.has-items::before { content:""; position:absolute; left:7px; top:11px; bottom:11px; width:4px; border-radius:4px; background:var(--ink-3); }
+.phase-head.has-items:hover { border-color:var(--teal-300); box-shadow:var(--shadow); transform:translateX(2px); }
+.phase-head.open { color:var(--accent); border-color:var(--teal-300); background:linear-gradient(180deg,var(--teal-50),var(--surface-solid)); box-shadow:var(--shadow); }
+.phase-head.wb-expired::before{background:var(--st-expired)} .phase-head.wb-critical::before{background:var(--st-critical)}
+.phase-head.wb-due::before{background:var(--st-due)} .phase-head.wb-good::before{background:var(--st-good)}
+.phase-head.wb-permanent::before{background:var(--st-perm)} .phase-head.wb-recurring::before{background:var(--st-rec)}
+.phase-head.wb-pending::before{background:var(--st-pend)}
+.phase-head .chev { width:18px; height:18px; flex:0 0 auto; transition:transform .2s; color:var(--accent); opacity:.9; }
+.phase-head:not(.open) .chev { color:var(--ink-3); }
 .phase-head.open .chev { transform:rotate(90deg); }
 .phase-head.empty .chev { visibility:hidden; }
-.phase-head .phase-name { white-space:nowrap; }
+.phase-head .phase-name { white-space:nowrap; font-size:13px; }
 .phase-head .phase-line { flex:1; height:1px; background:var(--hair); min-width:10px; }
-.phase-head .phase-pills { display:flex; gap:5px; flex:0 0 auto; }
-.phase-head .phase-pills .pill { text-transform:none; letter-spacing:0; font-size:10px; padding:2px 8px; }
-.phase-head .phase-count { flex:0 0 auto; min-width:24px; text-align:center; background:var(--hair);
-  color:var(--ink-2); border-radius:999px; padding:2px 9px; font-size:10.5px; }
+.phase-head .phase-pills { display:flex; gap:6px; flex:0 0 auto; }
+.phase-head .phase-pills .pill { text-transform:none; letter-spacing:0; font-size:10.5px; padding:3px 9px; }
+.phase-head .phase-count { flex:0 0 auto; min-width:28px; text-align:center; background:var(--hair);
+  color:var(--ink); font-weight:800; border-radius:999px; padding:3px 11px; font-size:12px; }
 .phase-head.open .phase-count { background:var(--accent); color:var(--accent-ink); }
-.phase-head.empty { opacity:.5; }
-.phase-head.empty .phase-count { background:transparent; border:1px solid var(--hair); }
-.phase-body { display:none; padding:2px 4px 4px; }
-.phase-body.open { display:block; }
-[data-theme="dark"] .phase-head.open { background:rgba(20,184,166,.10); }
-@media print { .phase-body { display:block !important; } .phase-head.empty { display:none; }
-  .phase-head .chev { display:none; } }
+.phase-head.empty { opacity:.55; padding-left:20px; }
+.phase-head.empty .phase-count { background:transparent; border:1px solid var(--hair); color:var(--ink-3); }
+.phase-body { display:none; padding:4px 6px 6px; }
+.phase-body.open { display:block; animation:phaseReveal .22s ease; }
+@keyframes phaseReveal { from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:none} }
+[data-theme="dark"] .phase-head.open { background:linear-gradient(180deg,rgba(20,184,166,.12),transparent); }
+@media print { .phase-body { display:block !important; } .phase-head.empty { display:none; } .phase-head .chev { display:none; } }
 /* green header for facility & other cards so white rows below stand out */
 .group-head.green { background:linear-gradient(135deg,var(--teal-600),var(--teal-700)); border-radius:18px 18px 0 0; }
 .group-head.green .g-name, .group-head.green .g-meta { color:#fff; }

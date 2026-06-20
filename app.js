@@ -620,9 +620,10 @@
       const key = (groupKey || "") + "||" + label;
       const open = n ? !!state.openPhases[key] : false;
       const gs = n ? statsFor(list) : null;
+      const worst = n ? list.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] : "";
       const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k])
         .map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
-      const h = el("div", "phase-head" + (n ? " has-items" : " empty") + (open ? " open" : ""));
+      const h = el("div", "phase-head" + (n ? " has-items wb-" + worst : " empty") + (open ? " open" : ""));
       h.innerHTML =
         '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         '<span class="phase-name">' + esc(label) + '</span>' +
