@@ -829,8 +829,8 @@
     const base = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
     const sub = showEntity ? (it.entity + (base ? " · " + base : "")) : base;
     const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>' : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : "");
-    // facility / other files get an "email me this item" button (sends to the signed-in user)
-    const mail = it.scope !== "provider" ? '<button class="tile-mail" title="Email me this item" aria-label="Email me this item">✉</button>' : '';
+    // every file gets an "email me this item" icon on the tile (sends to the signed-in user)
+    const mail = '<button class="tile-mail" title="Email me this item" aria-label="Email me this item">✉</button>';
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' + mail + '</div>' +
       '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
       '<div class="tile-foot"><span class="status-badge s-' + s.key + '">' + s.label + '</span>' +
