@@ -808,27 +808,30 @@
     const num = (label.match(/^\d+/) || [""])[0];
     const nameOnly = label.replace(/^\d+\.\s*/, "");
     const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
+    const mail = (n && items[0].scope !== "provider") ? '<button class="tile-mail" title="Email me this folder" aria-label="Email me this folder">✉</button>' : '';
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + (num ? '<div class="tile-num">' + num + '</div>' : '<div class="tile-ic"></div>') +
-      '<span class="tile-count">' + n + '</span></div>' +
+      '<div class="tile-topr">' + mail + '<span class="tile-count">' + n + '</span></div></div>' +
       '<div class="tile-nm">' + esc(nameOnly) + '</div>' + (pills ? '<div class="tile-pills">' + pills + '</div>' : (n ? "" : '<div class="tile-meta">empty</div>'));
-    if (n) t.onclick = () => navigate([entity, label]); else t.classList.add("disabled");
+    if (n) {
+      t.onclick = () => navigate([entity, label]);
+      const mb = t.querySelector(".tile-mail"); if (mb) mb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(entity + " — " + nameOnly, items); };
+    } else t.classList.add("disabled");
     return t;
   }
   function docTile(it, showEntity) {
     const s = computeStatus(it);
-    const hasFile = !!fileViewerUrl(it);
     const t = el("div", "tile doc is-file s-" + s.key);
     const base = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
     const sub = showEntity ? (it.entity + (base ? " · " + base : "")) : base;
     const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>' : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : "");
-    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' +
-      '<button class="tile-det" title="Details, verify & history" aria-label="Details">⋯</button></div>' +
+    // facility / other files get an "email me this item" button (sends to the signed-in user)
+    const mail = it.scope !== "provider" ? '<button class="tile-mail" title="Email me this item" aria-label="Email me this item">✉</button>' : '';
+    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' + mail + '</div>' +
       '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
       '<div class="tile-foot"><span class="status-badge s-' + s.key + '">' + s.label + '</span>' +
-      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + '</span>' + proof +
-      (hasFile ? '<span class="tile-open">Open ›</span>' : '') + '</div>';
-    t.querySelector(".tile-det").onclick = (e) => { e.stopPropagation(); openDrawer(it, false); };
-    t.onclick = () => hasFile ? openFile(it) : openDrawer(it, false);
+      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + '</span>' + proof + '</div>';
+    const mb = t.querySelector(".tile-mail"); if (mb) mb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(it.entity + " — " + it.category, [it]); };
+    t.onclick = () => openDrawer(it, false);   // click opens the side drawer; "Open in Outlook" there opens the file
     return t;
   }
   function entityHeader(name, items, tab) {

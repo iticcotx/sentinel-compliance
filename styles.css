@@ -295,11 +295,12 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
   border-color:var(--bg) var(--bg) transparent transparent; }
 .tile.is-file .tile-ic { background:#eaf1fb; color:#3b6fb0; }
 [data-theme="dark"] .tile.is-file .tile-ic { background:rgba(59,111,176,.20); color:#9cc2f0; }
-.tile-det { margin-left:auto; border:none; background:transparent; color:var(--ink-3); font-size:18px; line-height:1; cursor:pointer; padding:2px 7px; border-radius:8px; flex:0 0 auto; }
-.tile-det:hover { background:var(--hair); color:var(--ink); }
+.tile-topr { display:flex; align-items:center; gap:8px; margin-left:auto; }
+.tile-mail { margin-left:auto; border:1px solid var(--hair); background:var(--surface-solid); color:var(--accent); font-size:14px; line-height:1; cursor:pointer; padding:5px 9px; border-radius:9px; flex:0 0 auto; }
+.tile-topr .tile-mail { margin-left:0; }
+.tile-mail:hover { border-color:var(--teal-300); background:var(--teal-50); }
 .tile.doc .tile-foot { margin-top:auto; align-items:center; }
 .tile-when { color:var(--ink-2); font-weight:600; font-size:12px; }
-.tile-open { margin-left:auto; color:var(--accent); font-weight:800; font-size:12px; }
 
 /* ---- prominent search + sort, search results header ---- */
 .search.big { flex:1 1 340px; min-width:230px; }
