@@ -278,6 +278,11 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .tile-nm { font-weight:800; font-size:15px; margin-top:auto; line-height:1.25; }
 .tile-meta { font-size:12px; color:var(--ink-3); margin-top:4px; }
 .tile-pills { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.tile-cov { font-size:11px; font-weight:800; color:var(--st-good); margin-top:6px; }
+.tile-cov.none { color:var(--st-critical); }
+/* folder with no documents uploaded yet — still clickable (to upload), but clearly empty of files */
+.tile.is-folder.nofiles { border-style:dashed; }
+.tile.is-folder.nofiles::after { opacity:.35; }
 .tile-foot { font-size:12px; color:var(--ink-2); font-weight:600; margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .tile.doc .status-badge { font-size:10px; padding:4px 9px; }
 .hempty { padding:42px; text-align:center; color:var(--ink-3); font-size:14px; grid-column:1/-1; }

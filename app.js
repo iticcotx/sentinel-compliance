@@ -790,13 +790,15 @@
   function entityTile(name, items, tab) {
     const gs = statsFor(items);
     const isProv = tab === "provider";
-    const t = el("div", "tile is-folder s-" + worstKey(items));
+    const onFile = items.filter(i => i.isFile).length;
+    const t = el("div", "tile is-folder s-" + worstKey(items) + (onFile ? "" : " nofiles"));
     const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
       : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
     const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
     const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + icon + miniRing(gs.score) + '</div>' +
       '<div class="tile-nm">' + esc(name) + test + '</div><div class="tile-meta">' + items.length + ' tracked items</div>' +
+      '<div class="tile-cov' + (onFile ? '' : ' none') + '">' + onFile + ' of ' + items.length + ' on file</div>' +
       (pills ? '<div class="tile-pills">' + pills + '</div>' : "");
     t.onclick = () => navigate([name]);
     return t;
@@ -807,11 +809,14 @@
     const t = el("div", "tile sec is-folder s-" + (n ? worstKey(items) : "none") + (n ? "" : " empty"));
     const num = (label.match(/^\d+/) || [""])[0];
     const nameOnly = label.replace(/^\d+\.\s*/, "");
+    const onFile = items.filter(i => i.isFile).length;
+    if (n && !onFile) t.classList.add("nofiles");
     const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
     const mail = (n && items[0].scope !== "provider") ? '<button class="tile-mail" title="Email me this folder" aria-label="Email me this folder">✉</button>' : '';
+    const cov = n ? '<div class="tile-cov' + (onFile ? '' : ' none') + '">' + onFile + ' of ' + n + ' on file</div>' : '';
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + (num ? '<div class="tile-num">' + num + '</div>' : '<div class="tile-ic"></div>') +
       '<div class="tile-topr">' + mail + '<span class="tile-count">' + n + '</span></div></div>' +
-      '<div class="tile-nm">' + esc(nameOnly) + '</div>' + (pills ? '<div class="tile-pills">' + pills + '</div>' : (n ? "" : '<div class="tile-meta">empty</div>'));
+      '<div class="tile-nm">' + esc(nameOnly) + '</div>' + cov + (pills ? '<div class="tile-pills">' + pills + '</div>' : (n ? "" : '<div class="tile-meta">empty</div>'));
     if (n) {
       t.onclick = () => navigate([entity, label]);
       const mb = t.querySelector(".tile-mail"); if (mb) mb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(entity + " — " + nameOnly, items); };
@@ -829,7 +834,7 @@
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' + mail + '</div>' +
       '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
       '<div class="tile-foot"><span class="status-badge s-' + s.key + '">' + s.label + '</span>' +
-      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : "—")) + '</span>' + proof + '</div>';
+      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : (it.isFile === false ? "Awaiting upload" : "—"))) + '</span>' + proof + '</div>';
     const mb = t.querySelector(".tile-mail"); if (mb) mb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(it.entity + " — " + it.category, [it]); };
     t.onclick = () => openDrawer(it, false);   // click opens the side drawer; "Open in Outlook" there opens the file
     return t;
