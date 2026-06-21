@@ -1416,13 +1416,14 @@
     const cs = (window.SENTINEL_SEED && window.SENTINEL_SEED.contacts) || [];
     if (!cs.length) { openModal("Facility contacts", '<div class="empty">No contacts in the data.</div>'); return; }
     const byF = {}; cs.forEach(c => { (byF[c.facility] = byF[c.facility] || []).push(c); });
-    let html = "";
-    Object.keys(byF).forEach(f => {
-      html += '<div class="contact-fac">' + esc(f) + '</div><div class="contact-grid">' +
-        byF[f].map(c => '<div class="contact-card"><div class="cc-name">' + esc(c.name) + '</div><div class="cc-role">' + esc(c.role || "") + '</div>' +
-          (c.phone ? '<a href="tel:' + esc(c.phone.split("/")[0].trim()) + '">📞 ' + esc(c.phone) + '</a>' : "") +
-          (c.email ? '<a href="mailto:' + esc(c.email) + '">✉️ ' + esc(c.email) + '</a>' : "") + '</div>').join("") + '</div>';
-    });
+    const section = f => '<div class="contact-col"><div class="contact-fac">' + esc(f) + '</div><div class="contact-grid">' +
+      byF[f].map(c => '<div class="contact-card"><div class="cc-name">' + esc(c.name) + '</div><div class="cc-role">' + esc(c.role || "") + '</div>' +
+        (c.phone ? '<a href="tel:' + esc(c.phone.split("/")[0].trim()) + '">📞 ' + esc(c.phone) + '</a>' : "") +
+        (c.email ? '<a href="mailto:' + esc(c.email) + '">✉️ ' + esc(c.email) + '</a>' : "") + '</div>').join("") + '</div></div>';
+    // Facilities side by side (Castle Hills left, Frisco right); Help & Support spans full width below.
+    const facs = Object.keys(byF).filter(f => !/Help & Support/i.test(f));
+    const support = Object.keys(byF).filter(f => /Help & Support/i.test(f));
+    const html = '<div class="contact-cols">' + facs.map(section).join("") + '</div>' + support.map(section).join("");
     openModal("Facility contacts directory", html);
   }
 

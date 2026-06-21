@@ -302,6 +302,11 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 .tile.doc .tile-foot { margin-top:auto; align-items:center; }
 .tile-when { color:var(--ink-2); font-weight:600; font-size:12px; }
 
+/* contacts directory: facilities side by side, support full width below */
+.contact-cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+@media (max-width:640px) { .contact-cols { grid-template-columns:1fr; } }
+.contact-col .contact-fac { margin-top:0; }
+
 /* ---- prominent search + sort, search results header ---- */
 .search.big { flex:1 1 340px; min-width:230px; }
 .search.big input { font-size:15px; padding:12px 14px; }
