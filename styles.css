@@ -322,6 +322,9 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 /* ---- required-field marker + error highlight (email composer) ---- */
 .req { color:var(--st-expired); font-weight:800; }
 input.err, .etf.err { border-color:var(--st-expired) !important; box-shadow:0 0 0 3px rgba(220,38,38,.16) !important; }
+.ocr-status { margin-top:10px; padding:9px 12px; border-radius:10px; font-size:12.5px; font-weight:600;
+  background:var(--teal-50); color:var(--teal-700); border:1px solid var(--teal-300); }
+[data-theme="dark"] .ocr-status { background:rgba(20,184,166,.10); }
 
 /* sticky in-card section jump-nav */
 .sec-nav { position:sticky; top:8px; z-index:6; display:flex; gap:8px; flex-wrap:wrap; padding:10px;

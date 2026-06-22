@@ -1013,28 +1013,27 @@
     while ((m = re2.exec(text))) push(+m[3], mon[m[1].toLowerCase().slice(0, 3)], +m[2]);
     return [...new Set(out)].sort();
   }
+  function ocrStat(msg) { const e = $("#ocrStatus"); if (e) e.innerHTML = msg; }
   async function ocrReadDate(it, auto) {
-    if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { if (!auto) toast("No document file to read."); return; }
-    if (!OVERLAY.ocrTried) OVERLAY.ocrTried = {};
-    if (auto && OVERLAY.ocrTried[it.id]) return;     // auto-read each document only once
+    if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { ocrStat("No document file to read."); return; }
     try {
-      if (!auto) toast("Loading OCR engine…");
+      ocrStat("🔎 Loading OCR engine…");
       await ensureTesseract();
+      ocrStat("🔎 Fetching the document…");
       const r = await fetch("/api/data?file=" + encodeURIComponent(it.fileLink));
-      if (!r.ok) { let d = ""; try { d = (await r.json()).error || ""; } catch (e) { } throw new Error("file fetch " + r.status + (d ? " (" + d + ")" : "")); }
+      if (!r.ok) { let d = ""; try { d = (await r.json()).error || ""; } catch (e) { } ocrStat("⚠ Couldn't fetch the file (" + r.status + (d ? ": " + esc(d) : "") + ")."); return; }
       const blob = await r.blob();
-      if (/pdf/i.test(blob.type)) { OVERLAY.ocrTried[it.id] = true; saveOverlay(); if (!auto) toast("OCR reads image scans/photos; this is a PDF — use Edit to set the date."); return; }
-      if (!auto) toast("Reading the document… (first run ~10s)");
+      if (/pdf/i.test(blob.type)) { ocrStat("This is a PDF — automatic OCR reads photos/scans. Use Edit to set the date."); return; }
+      ocrStat("🔎 Reading the document… (first run downloads the engine, ~10–20s)");
       const res = await Tesseract.recognize(blob, "eng");
       const dates = extractDates((res && res.data && res.data.text) || "");
-      OVERLAY.ocrTried[it.id] = true; saveOverlay();
-      if (!dates.length) { if (!auto) toast("No date could be read from this document."); return; }
-      if (auto) {
-        const today = new Date().toISOString().slice(0, 10);
-        const future = dates.filter(d => d >= today);
-        setOcrExpiry(it, future.length ? future[future.length - 1] : dates[dates.length - 1], true);
-      } else { pickOcrDate(it, dates); }
-    } catch (e) { if (!auto) toast("OCR failed: " + String(e.message || e).slice(0, 90)); }
+      if (!dates.length) { ocrStat("⚠ Couldn't read a date from this scan. If it's clear, the date format may be unusual — open “Edit” to set it."); return; }
+      const today = new Date().toISOString().slice(0, 10);
+      const future = dates.filter(d => d >= today);
+      const pick = future.length ? future[future.length - 1] : dates[dates.length - 1];
+      if (auto) { ocrStat("✓ Read expiry " + fmtD(pick)); setOcrExpiry(it, pick, true); }
+      else pickOcrDate(it, dates);
+    } catch (e) { ocrStat("⚠ OCR error: " + esc(String(e.message || e).slice(0, 90))); }
   }
   function pickOcrDate(it, dates) {
     const html = '<div class="item-sub" style="margin-bottom:10px">OCR read these dates from <b>' + esc(it.category) + '</b>. Pick the expiry:</div>' +
@@ -1083,9 +1082,10 @@
     return '<div class="dfield"><div class="dl">Proof document</div>' +
       (fname ? '<div class="pdf-name">📄 ' + esc(fname) + '</div>' : '') + preview +
       '<div class="doc-btns"><a class="doc-link" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open file in Outlook</a>' +
-      (READONLY ? '' : '<button class="doc-link ghost" id="dOcr">🔎 Read date (OCR)</button>') +
       ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
-      '</div></div>';
+      '</div>' +
+      ((CLOUD && it.isFile && !it.expires && !READONLY) ? '<div id="ocrStatus" class="ocr-status">🔎 Reading expiry from the document…</div>' : '') +
+      '</div>';
   }
   function wireAttach(it) {
     const b = $("#dAttach"); if (!b) return;
@@ -1132,9 +1132,8 @@
     if ($("#dEdit")) $("#dEdit").onclick = () => renderDrawerEdit(it, false);
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
     $("#dIcs").onclick = () => exportICS(it);
-    if ($("#dOcr")) $("#dOcr").onclick = () => ocrReadDate(it);
-    // Auto-read the expiry off the document the first time it's opened — no button press.
-    if (CLOUD && it.isFile && !it.expires && !(OVERLAY.ocrTried && OVERLAY.ocrTried[it.id])) setTimeout(() => ocrReadDate(it, true), 80);
+    // Auto-read the expiry off the document when it opens — no button. Runs until a date is set.
+    if (CLOUD && it.isFile && !it.expires && !READONLY) setTimeout(() => ocrReadDate(it, true), 80);
     if ($("#dEmail")) $("#dEmail").onclick = () => openEmailTemplate(it);
     $("#dWatch").onclick = () => { toggleWatch(it.id); renderDrawerView(it); render(); };
     if ($("#dRenew")) $("#dRenew").onclick = () => markRenewed(it);
