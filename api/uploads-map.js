@@ -17,7 +17,16 @@ module.exports = async (req, res) => {
     const token = await accessToken();
     if (req.method === "GET") {
       const [detected, uploads] = await Promise.all([readJsonAt(token, DETECTED), readJsonAt(token, UPLOADS)]);
-      res.status(200).json(Object.assign({}, detected || {}, uploads || {}));
+      // QR uploads win for url/name, but keep a date from EITHER source (so a server-OCR'd
+      // expiry in auto_detected isn't lost when an older uploads.json entry has no date).
+      const merged = Object.assign({}, detected || {});
+      const u = uploads || {};
+      for (const id in u) {
+        const prev = merged[id] || {};
+        merged[id] = Object.assign({}, prev, u[id]);
+        if (!merged[id].date && prev.date) merged[id].date = prev.date;
+      }
+      res.status(200).json(merged);
       return;
     }
     if (req.method === "POST") {
