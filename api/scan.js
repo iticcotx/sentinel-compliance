@@ -1,12 +1,13 @@
-// Auto-detect documents dropped directly into OneDrive (not via the QR page).
-// Uses Microsoft Graph "delta": primes to "now" on first run, then each call
-// processes only files added/changed since last time and matches them to items
-// (same filename rules as the local matcher). Results -> _Sentinel/auto_detected.json,
-// which /api/uploads-map merges into what the dashboard reads.
-const { accessToken, driveRoot, drivePath, encPath, readJsonAt, writeJsonAt, dateFromName } = require("../lib/graph");
+// Auto-detect documents added ANYWHERE under the Sentinel library — via the dashboard QR
+// uploader, OneDrive, or directly in SharePoint. Uses Microsoft Graph "delta" on the docs
+// library: primes to "now" on first run, then each call processes only files added/changed
+// since last time and matches them to items by folder + filename. Results ->
+// _Sentinel/auto_detected.json (kept on the OneDrive app-state drive), which /api/uploads-map
+// merges into what the dashboard reads (the dashboard live-syncs every ~45s).
+const { accessToken, docsRoot, docsPathFromUrl, drivePath, readJsonAt, writeJsonAt, dateFromName } = require("../lib/graph");
 const data = require("../data.json");
 
-const ROOTSEG = "WCGTX Phyicians_04.08.2020";
+// app-state stays on the OneDrive drive (decoupled from where documents live)
 const STATE = drivePath("_Sentinel/scan_state.json");
 const DETECTED = drivePath("_Sentinel/auto_detected.json");
 
@@ -22,7 +23,7 @@ const FILE_RULES = {
   "DEA Verify (annual)": "dea[ ]*ver",
   "Influenza Vaccination": "flu|influenza",
   "TB Screening": "\\btb\\b|ppd|tubercul|quantiferon|\\bcxr\\b|chest",
-  "Driver's License": "txdl|driver|\\bdl ",
+  "Driver's License": "txdl|driver|\\bdl[ ]",
   "NPDB Query (2 yrs)": "npdb",
   "OIG / SAM Exclusion Check": "oig|sam |exclusion",
   "NPI Verification": "nppes|\\bnpi\\b",
@@ -38,15 +39,15 @@ const FILE_RULES = {
 };
 function normf(s) { return String(s).toLowerCase().replace(/_/g, " ").replace(/ii/g, "i"); }
 
-// Build folder -> items index from data.json once.
+// Build folder -> items index keyed by the docs-library-relative folder path
+// (derived from each item's SharePoint folderLink URL).
 let INDEX = null;
 function index() {
   if (INDEX) return INDEX;
   const folders = {};
   for (const it of (data.items || [])) {
-    const fl = it.folderLink || it.fileLink || "";
-    if (!fl) continue;
-    const rel = fl.replace(/^(\.\.\/)+/, "").replace(/\/+$/, "");
+    const rel = docsPathFromUrl(it.folderLink || it.fileLink || "");
+    if (!rel) continue;
     (folders[rel] = folders[rel] || []).push(it);
   }
   INDEX = { folders, rels: Object.keys(folders).sort((a, b) => b.length - a.length) };
@@ -64,6 +65,15 @@ function matchItem(folderRel, fileName) {
   }
   return null;
 }
+// Pull the library-relative path out of a Graph parentReference.path
+// e.g. "/drives/<id>/root:/Sama Farooqui/Sentinel/Provider/X" -> "Sama Farooqui/Sentinel/Provider/X"
+function relFromParent(path) {
+  const i = String(path || "").indexOf("root:");
+  if (i < 0) return null;
+  let rel = String(path).slice(i + 5).replace(/^\/+/, "");
+  try { rel = decodeURIComponent(rel); } catch (e) { }
+  return rel;
+}
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -71,11 +81,12 @@ module.exports = async (req, res) => {
   try {
     const token = await accessToken();
     const state = (await readJsonAt(token, STATE)) || {};
-    // First run: prime delta to "now" so we don't enumerate all 24k existing files.
-    if (!state.deltaLink) {
-      const r = await fetch(driveRoot() + "/root/delta?token=latest", { headers: { Authorization: "Bearer " + token } });
+    // First run (or migrating off the old OneDrive delta): prime to "now" against the docs
+    // library so we don't enumerate the whole archive. driveTag invalidates any stale token.
+    if (!state.deltaLink || state.driveTag !== "docs-v1") {
+      const r = await fetch(docsRoot() + "/root/delta?token=latest", { headers: { Authorization: "Bearer " + token } });
       const j = await r.json();
-      await writeJsonAt(token, STATE, { deltaLink: j["@odata.deltaLink"] });
+      await writeJsonAt(token, STATE, { deltaLink: j["@odata.deltaLink"], driveTag: "docs-v1" });
       res.status(200).json({ ok: true, initialized: true, detected: 0 });
       return;
     }
@@ -87,11 +98,9 @@ module.exports = async (req, res) => {
       if (!r.ok) break;
       const j = await r.json();
       for (const v of (j.value || [])) {
-        const path = (v.parentReference && v.parentReference.path) || "";
-        const i = path.indexOf(ROOTSEG + "/");
-        if (i < 0) continue;
+        const folderRel = relFromParent((v.parentReference && v.parentReference.path) || "");
+        if (!folderRel || folderRel.indexOf("Sentinel/") < 0) continue;   // only the Sentinel tree
         if (!v.file && !v.deleted) continue;
-        const folderRel = decodeURIComponent(path.slice(i + ROOTSEG.length + 1));
         const it = matchItem(folderRel, v.name || "");
         if (!it) continue;
         if (v.deleted) { if (detected[it.id] && detected[it.id].name === v.name) { delete detected[it.id]; changed++; } }
@@ -100,7 +109,7 @@ module.exports = async (req, res) => {
       next = j["@odata.nextLink"]; deltaLink = j["@odata.deltaLink"] || deltaLink; pages++;
     }
     if (changed) await writeJsonAt(token, DETECTED, detected);
-    await writeJsonAt(token, STATE, { deltaLink: deltaLink || next || state.deltaLink });
+    await writeJsonAt(token, STATE, { deltaLink: deltaLink || next || state.deltaLink, driveTag: "docs-v1" });
     res.status(200).json({ ok: true, changed, items: Object.keys(detected).length });
   } catch (e) {
     res.status(200).json({ ok: false, message: String(e.message || e) });
