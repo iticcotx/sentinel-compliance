@@ -992,6 +992,61 @@
   }
   function closeDrawer() { $("#drawer").classList.remove("show"); $("#drawerBack").classList.remove("show"); drawerItem = null; }
 
+  // ===== Free in-browser OCR (Tesseract.js) — read an expiry date off a scanned document =====
+  function ensureTesseract() {
+    return new Promise((resolve, reject) => {
+      if (window.Tesseract) return resolve();
+      const sc = document.createElement("script");
+      sc.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      sc.onload = resolve; sc.onerror = () => reject(new Error("Could not load the OCR engine."));
+      document.head.appendChild(sc);
+    });
+  }
+  function extractDates(text) {
+    const out = [];
+    const push = (y, mo, d) => { if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) out.push(y + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0")); };
+    let m;
+    const re = /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/g;
+    while ((m = re.exec(text))) { let y = +m[3]; if (y < 100) y += 2000; push(y, +m[1], +m[2]); }
+    const mon = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    const re2 = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/gi;
+    while ((m = re2.exec(text))) push(+m[3], mon[m[1].toLowerCase().slice(0, 3)], +m[2]);
+    return [...new Set(out)].sort();
+  }
+  async function ocrReadDate(it) {
+    if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { toast("No document file to read."); return; }
+    try {
+      toast("Loading OCR engine…");
+      await ensureTesseract();
+      toast("Fetching document…");
+      const r = await fetch("/api/data?file=" + encodeURIComponent(it.fileLink));
+      if (!r.ok) throw new Error("file fetch " + r.status);
+      const blob = await r.blob();
+      if (/pdf/i.test(blob.type)) { toast("OCR works on image scans/photos; this is a PDF — use Edit to set the date."); return; }
+      toast("Reading the document… (first run downloads the engine, ~10s)");
+      const res = await Tesseract.recognize(blob, "eng");
+      const dates = extractDates((res && res.data && res.data.text) || "");
+      if (!dates.length) { toast("No date could be read from this document."); return; }
+      pickOcrDate(it, dates);
+    } catch (e) { toast("OCR failed: " + String(e.message || e).slice(0, 80)); }
+  }
+  function pickOcrDate(it, dates) {
+    const html = '<div class="item-sub" style="margin-bottom:10px">OCR read these dates from <b>' + esc(it.category) + '</b>. Pick the expiry:</div>' +
+      dates.map(d => '<button class="doc-link ocrd" data-d="' + d + '" style="display:block;width:100%;text-align:left;margin-bottom:6px">📅 ' + fmtD(d) + '</button>').join("") +
+      '<div class="item-sub" style="margin-top:8px;opacity:.65">Not the right one? Close this and use Edit to type it.</div>';
+    openModal("Read expiry (OCR)", html);
+    [...$("#modalInner").querySelectorAll(".ocrd")].forEach(b => b.onclick = () => { setOcrExpiry(it, b.dataset.d); closeModal(); });
+  }
+  function setOcrExpiry(it, iso) {
+    OVERLAY.edits[it.id] = Object.assign({}, it, OVERLAY.edits[it.id] || {}, { expires: iso, permanent: false, pending: false });
+    OVERLAY.logs[it.id] = (OVERLAY.logs[it.id] || []);
+    OVERLAY.logs[it.id].push({ text: "Expiry read via OCR — " + iso, date: new Date().toISOString().slice(0, 10) });
+    logAudit("edit", it, "expiry read via OCR: " + iso);
+    saveOverlay(); buildData(); render();
+    renderDrawerView(DATA.find(x => x.id === it.id) || Object.assign({}, it, { expires: iso }));
+    toast("Expiry set to " + fmtD(iso) + " — read from the document.");
+  }
+
   function docSection(it) {
     let raw = it.fileLink || "";
     // Cloud: a MATCHED proof still pointing at a local-disk path → build its SharePoint
@@ -1022,6 +1077,7 @@
     return '<div class="dfield"><div class="dl">Proof document</div>' +
       (fname ? '<div class="pdf-name">📄 ' + esc(fname) + '</div>' : '') + preview +
       '<div class="doc-btns"><a class="doc-link" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open file in Outlook</a>' +
+      (READONLY ? '' : '<button class="doc-link ghost" id="dOcr">🔎 Read date (OCR)</button>') +
       ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
       '</div></div>';
   }
@@ -1070,6 +1126,7 @@
     if ($("#dEdit")) $("#dEdit").onclick = () => renderDrawerEdit(it, false);
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
     $("#dIcs").onclick = () => exportICS(it);
+    if ($("#dOcr")) $("#dOcr").onclick = () => ocrReadDate(it);
     if ($("#dEmail")) $("#dEmail").onclick = () => openEmailTemplate(it);
     $("#dWatch").onclick = () => { toggleWatch(it.id); renderDrawerView(it); render(); };
     if ($("#dRenew")) $("#dRenew").onclick = () => markRenewed(it);
