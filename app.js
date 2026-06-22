@@ -1017,17 +1017,12 @@
   async function ocrReadDate(it, auto) {
     if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { ocrStat("No document file to read."); return; }
     try {
-      ocrStat("🔎 Loading OCR engine…");
-      await ensureTesseract();
-      ocrStat("🔎 Fetching the document…");
-      const r = await fetch("/api/data?file=" + encodeURIComponent(it.fileLink));
-      if (!r.ok) { let d = ""; try { d = (await r.json()).error || ""; } catch (e) { } ocrStat("⚠ Couldn't fetch the file (" + r.status + (d ? ": " + esc(d) : "") + ")."); return; }
-      const blob = await r.blob();
-      if (/pdf/i.test(blob.type)) { ocrStat("This is a PDF — automatic OCR reads photos/scans. Use Edit to set the date."); return; }
-      ocrStat("🔎 Reading the document… (first run downloads the engine, ~10–20s)");
-      const res = await Tesseract.recognize(blob, "eng");
-      const dates = extractDates((res && res.data && res.data.text) || "");
-      if (!dates.length) { ocrStat("⚠ Couldn't read a date from this scan. If it's clear, the date format may be unusual — open “Edit” to set it."); return; }
+      ocrStat("🔎 Reading the document… (OCR, a few seconds)");
+      const r = await fetch("/api/data?ocr=" + encodeURIComponent(it.fileLink));
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) { ocrStat("⚠ " + esc(j.error ? (j.error + (j.detail ? " — " + j.detail : "")) : ("OCR failed " + r.status))); return; }
+      const dates = j.dates || [];
+      if (!dates.length) { ocrStat("⚠ OCR ran but found no date" + (j.chars ? " (read " + j.chars + " chars)" : "") + ". Open “Edit” to set it."); return; }
       const today = new Date().toISOString().slice(0, 10);
       const future = dates.filter(d => d >= today);
       const pick = future.length ? future[future.length - 1] : dates[dates.length - 1];
