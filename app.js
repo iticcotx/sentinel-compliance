@@ -66,7 +66,7 @@
   ["leads", "tasks", "snapshots", "logs", "edits", "verified"].forEach(k => { if (!OVERLAY[k]) OVERLAY[k] = {}; });
   let PREFS = loadJSON(PREF_KEY, { theme: "light" });
   let UNLOCKED = loadSession();
-  const state = { tab: "provider", view: "list", search: "", status: "", category: "", facility: "all", showInactive: false, openGroups: {}, quickView: "", selectMode: false, selection: new Set() };
+  const state = { tab: "provider", view: "list", search: "", status: "", category: "", facility: "all", sort: "name", showInactive: false, openGroups: {}, quickView: "", selectMode: false, selection: new Set() };
   function nowStamp() { return new Date().toISOString().slice(0, 16).replace("T", " "); }
   function logAudit(action, it, detail) { OVERLAY.audit.unshift({ action: action, id: it.id, entity: it.entity, category: it.category, detail: detail || "", at: nowStamp() }); if (OVERLAY.audit.length > 500) OVERLAY.audit.length = 500; saveOverlay(); }
   function isWatched(id) { return OVERLAY.watch.indexOf(id) >= 0; }
@@ -417,18 +417,10 @@
     if (!UNLOCKED.has(state.tab)) return;   // hide summary until the tab passcode is entered
     const arr = tabItems(state.tab);
     const s = statsFor(arr);
-    const ring = (() => {
-      const r = 40, c = 2 * Math.PI * r, off = c * (1 - s.score / 100);
-      const col = s.score >= 85 ? "var(--st-good)" : s.score >= 60 ? "var(--st-due)" : "var(--st-critical)";
-      return '<div class="gauge"><svg width="92" height="92" viewBox="0 0 92 92">' +
-        '<circle cx="46" cy="46" r="40" fill="none" stroke="var(--hair)" stroke-width="8"/>' +
-        '<circle cx="46" cy="46" r="40" fill="none" stroke="' + col + '" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + off + '"/></svg>' +
-        '<div class="g-num" style="color:' + col + '">' + s.score + '</div></div>';
-    })();
     const health = el("div", "kpi kpi-health glass" + (!state.status && !state.quickView ? " active" : ""));
     health.style.cursor = "pointer";
     health.title = "Show all items (clear status filters)";
-    health.innerHTML = ring + '<div class="h-meta"><div class="k-label">Health score · show all</div>' +
+    health.innerHTML = '<div class="h-meta"><div class="k-label">Show all items</div>' +
       '<div class="h-title">' + (state.tab === "provider" ? "Provider" : state.tab === "facility" ? "Facility" : "Operational") + ' readiness</div>' +
       '<div class="h-desc">' + s.total + ' tracked items · <b>' + s.expired + '</b> expired · <b>' + s.critical + '</b> critical</div></div>';
     health.onclick = () => { state.status = ""; state.quickView = ""; render(); };
@@ -490,7 +482,7 @@
       '<div class="search big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>' +
       '<input id="q" type="search" name="sf-' + Math.random().toString(36).slice(2) + '" autocomplete="off" autocorrect="off" spellcheck="false" readonly data-1p-ignore data-lpignore="true" placeholder="Search this tab — provider, document, license #, file name…" value="' + esc(state.search) + '">' +
       '<button id="qClear" class="q-clear" title="Clear search"' + (state.search ? '' : ' style="display:none"') + '>×</button></div>' +
-      '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "status") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
+      '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "name") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
       (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
       (state.tab === "provider" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
@@ -765,13 +757,13 @@
   function worstKey(items) { return items.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] || "none"; }
   function earliestExp(items) { return Math.min.apply(null, items.map(i => i.expires ? parseD(i.expires) : Infinity).concat(Infinity)); }
   function sortDocs(list) {
-    const by = state.sort || "status";
+    const by = state.sort || "name";
     if (by === "name") return list.slice().sort((a, b) => (a.category || "").localeCompare(b.category || ""));
     if (by === "expiry") return list.slice().sort((a, b) => (a.expires ? parseD(a.expires) : Infinity) - (b.expires ? parseD(b.expires) : Infinity));
     return sortItems(list);
   }
   function sortedEntityNames(groups) {
-    const by = state.sort || "status", names = Object.keys(groups);
+    const by = state.sort || "name", names = Object.keys(groups);
     if (by === "name") return names.sort((a, b) => a.localeCompare(b));
     if (by === "expiry") return names.sort((a, b) => earliestExp(groups[a]) - earliestExp(groups[b]));
     return names.sort((a, b) => (STATUS_RANK[worstKey(groups[a])] - STATUS_RANK[worstKey(groups[b])]) || a.localeCompare(b));
@@ -796,7 +788,7 @@
       : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
     const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
     const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
-    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + icon + miniRing(gs.score) + '</div>' +
+    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + icon + '</div>' +
       '<div class="tile-nm">' + esc(name) + test + '</div><div class="tile-meta">' + items.length + ' tracked items</div>' +
       '<div class="tile-cov' + (onFile ? '' : ' none') + '">' + onFile + ' of ' + items.length + ' on file</div>' +
       (pills ? '<div class="tile-pills">' + pills + '</div>' : "");
@@ -844,8 +836,7 @@
     const isProv = tab === "provider";
     const wrap = el("div", "ent-head glass");
     wrap.innerHTML = '<div class="ent-ic">' + (isProv ? esc(initials(name)) : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:20px;height:20px">' + ICONS.building + '</svg>') + '</div>' +
-      '<div class="ent-info"><div class="ent-nm">' + esc(name) + '</div><div class="ent-meta">' + items.length + ' tracked items · health ' + gs.score + '</div></div>' +
-      miniRing(gs.score) +
+      '<div class="ent-info"><div class="ent-nm">' + esc(name) + '</div><div class="ent-meta">' + items.length + ' tracked items</div></div>' +
       '<div class="ent-actions">' + (isProv
         ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>'
         : '<button class="icon-btn" data-a="email">✉ Email</button><button class="icon-btn" data-a="binder">🗂 Binder</button>') + '</div>';
