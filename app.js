@@ -1014,20 +1014,32 @@
     return [...new Set(out)].sort();
   }
   function ocrStat(msg) { const e = $("#ocrStatus"); if (e) e.innerHTML = msg; }
+  function ocrApply(it, dates, auto) {
+    if (!dates || !dates.length) { ocrStat("OCR ran but found no date in this document. Open “Edit” to set it."); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const fut = dates.filter(d => d >= today);
+    const pick = fut.length ? fut[fut.length - 1] : dates[dates.length - 1];
+    if (!it.expires) {
+      if (auto) { ocrStat("✓ Auto-read expiry " + fmtD(pick)); setOcrExpiry(it, pick, true); }
+      else pickOcrDate(it, dates);
+    } else {
+      const same = pick === it.expires;
+      ocrStat("📄 Document reads <b>" + fmtD(pick) + "</b> · current expiry " + fmtD(it.expires) +
+        (same ? " ✓ match" : ' — <button id="ocrUse" style="border:none;background:none;color:var(--accent);font-weight:800;cursor:pointer;text-decoration:underline;padding:0">use document date</button>'));
+      const u = $("#ocrUse"); if (u) u.onclick = () => setOcrExpiry(it, pick, false);
+    }
+  }
   async function ocrReadDate(it, auto) {
     if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { ocrStat("No document file to read."); return; }
+    if (!OVERLAY.ocr) OVERLAY.ocr = {};
+    if (auto && OVERLAY.ocr[it.id]) { ocrApply(it, OVERLAY.ocr[it.id].dates, true); return; }  // cached — read once
     try {
       ocrStat("🔎 Reading the document… (OCR, a few seconds)");
       const r = await fetch("/api/data?ocr=" + encodeURIComponent(it.fileLink));
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j.error) { ocrStat("⚠ " + esc(j.error ? (j.error + (j.detail ? " — " + j.detail : "")) : ("OCR failed " + r.status))); return; }
-      const dates = j.dates || [];
-      if (!dates.length) { ocrStat("⚠ OCR ran but found no date" + (j.chars ? " (read " + j.chars + " chars)" : "") + ". Open “Edit” to set it."); return; }
-      const today = new Date().toISOString().slice(0, 10);
-      const future = dates.filter(d => d >= today);
-      const pick = future.length ? future[future.length - 1] : dates[dates.length - 1];
-      if (auto) { ocrStat("✓ Read expiry " + fmtD(pick)); setOcrExpiry(it, pick, true); }
-      else pickOcrDate(it, dates);
+      OVERLAY.ocr[it.id] = { dates: j.dates || [], at: new Date().toISOString().slice(0, 10) }; saveOverlay();
+      ocrApply(it, j.dates || [], auto);
     } catch (e) { ocrStat("⚠ OCR error: " + esc(String(e.message || e).slice(0, 90))); }
   }
   function pickOcrDate(it, dates) {
@@ -1079,7 +1091,7 @@
       '<div class="doc-btns"><a class="doc-link" href="' + viewerHref + '" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Open file in Outlook</a>' +
       ((!CLOUD && !READONLY) ? '<button class="doc-link ghost" id="dReadDate">📅 Read date</button>' : '') +
       '</div>' +
-      ((CLOUD && it.isFile && !it.expires && !READONLY) ? '<div id="ocrStatus" class="ocr-status">🔎 Reading expiry from the document…</div>' : '') +
+      ((CLOUD && it.isFile && !READONLY) ? '<div id="ocrStatus" class="ocr-status">🔎 Checking the document…</div>' : '') +
       '</div>';
   }
   function wireAttach(it) {
@@ -1127,8 +1139,8 @@
     if ($("#dEdit")) $("#dEdit").onclick = () => renderDrawerEdit(it, false);
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
     $("#dIcs").onclick = () => exportICS(it);
-    // Auto-read the expiry off the document when it opens — no button. Runs until a date is set.
-    if (CLOUD && it.isFile && !it.expires && !READONLY) setTimeout(() => ocrReadDate(it, true), 80);
+    // Auto-OCR every document on open (cached): fill the date if missing, verify if present.
+    if (CLOUD && it.isFile && !READONLY) setTimeout(() => ocrReadDate(it, true), 80);
     if ($("#dEmail")) $("#dEmail").onclick = () => openEmailTemplate(it);
     $("#dWatch").onclick = () => { toggleWatch(it.id); renderDrawerView(it); render(); };
     if ($("#dRenew")) $("#dRenew").onclick = () => markRenewed(it);
