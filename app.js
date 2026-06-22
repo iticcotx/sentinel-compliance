@@ -396,7 +396,7 @@
     closeDrawer(); closeModal();
     state.tab = "provider"; state.status = ""; state.quickView = ""; state.category = "";
     state.facility = "all"; state.search = ""; state.selectMode = false; state.selection.clear();
-    state.view = "list"; state.openGroups = {};
+    state.view = "list"; state.openGroups = {}; state.drill = []; state.openPhases = {};
     const vl = $("#viewLabel"); if (vl) vl.textContent = "Timeline";
     render(); window.scrollTo({ top: 0, behavior: "smooth" }); toast("Reset to home.");
   }
