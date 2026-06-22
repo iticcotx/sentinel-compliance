@@ -1013,22 +1013,28 @@
     while ((m = re2.exec(text))) push(+m[3], mon[m[1].toLowerCase().slice(0, 3)], +m[2]);
     return [...new Set(out)].sort();
   }
-  async function ocrReadDate(it) {
-    if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { toast("No document file to read."); return; }
+  async function ocrReadDate(it, auto) {
+    if (!it || !it.fileLink || !/^https?:/i.test(it.fileLink)) { if (!auto) toast("No document file to read."); return; }
+    if (!OVERLAY.ocrTried) OVERLAY.ocrTried = {};
+    if (auto && OVERLAY.ocrTried[it.id]) return;     // auto-read each document only once
     try {
-      toast("Loading OCR engine…");
+      if (!auto) toast("Loading OCR engine…");
       await ensureTesseract();
-      toast("Fetching document…");
       const r = await fetch("/api/data?file=" + encodeURIComponent(it.fileLink));
-      if (!r.ok) throw new Error("file fetch " + r.status);
+      if (!r.ok) { let d = ""; try { d = (await r.json()).error || ""; } catch (e) { } throw new Error("file fetch " + r.status + (d ? " (" + d + ")" : "")); }
       const blob = await r.blob();
-      if (/pdf/i.test(blob.type)) { toast("OCR works on image scans/photos; this is a PDF — use Edit to set the date."); return; }
-      toast("Reading the document… (first run downloads the engine, ~10s)");
+      if (/pdf/i.test(blob.type)) { OVERLAY.ocrTried[it.id] = true; saveOverlay(); if (!auto) toast("OCR reads image scans/photos; this is a PDF — use Edit to set the date."); return; }
+      if (!auto) toast("Reading the document… (first run ~10s)");
       const res = await Tesseract.recognize(blob, "eng");
       const dates = extractDates((res && res.data && res.data.text) || "");
-      if (!dates.length) { toast("No date could be read from this document."); return; }
-      pickOcrDate(it, dates);
-    } catch (e) { toast("OCR failed: " + String(e.message || e).slice(0, 80)); }
+      OVERLAY.ocrTried[it.id] = true; saveOverlay();
+      if (!dates.length) { if (!auto) toast("No date could be read from this document."); return; }
+      if (auto) {
+        const today = new Date().toISOString().slice(0, 10);
+        const future = dates.filter(d => d >= today);
+        setOcrExpiry(it, future.length ? future[future.length - 1] : dates[dates.length - 1], true);
+      } else { pickOcrDate(it, dates); }
+    } catch (e) { if (!auto) toast("OCR failed: " + String(e.message || e).slice(0, 90)); }
   }
   function pickOcrDate(it, dates) {
     const html = '<div class="item-sub" style="margin-bottom:10px">OCR read these dates from <b>' + esc(it.category) + '</b>. Pick the expiry:</div>' +
@@ -1037,14 +1043,14 @@
     openModal("Read expiry (OCR)", html);
     [...$("#modalInner").querySelectorAll(".ocrd")].forEach(b => b.onclick = () => { setOcrExpiry(it, b.dataset.d); closeModal(); });
   }
-  function setOcrExpiry(it, iso) {
+  function setOcrExpiry(it, iso, quiet) {
     OVERLAY.edits[it.id] = Object.assign({}, it, OVERLAY.edits[it.id] || {}, { expires: iso, permanent: false, pending: false });
     OVERLAY.logs[it.id] = (OVERLAY.logs[it.id] || []);
     OVERLAY.logs[it.id].push({ text: "Expiry read via OCR — " + iso, date: new Date().toISOString().slice(0, 10) });
     logAudit("edit", it, "expiry read via OCR: " + iso);
     saveOverlay(); buildData(); render();
-    renderDrawerView(DATA.find(x => x.id === it.id) || Object.assign({}, it, { expires: iso }));
-    toast("Expiry set to " + fmtD(iso) + " — read from the document.");
+    if ($("#drawer").classList.contains("show")) renderDrawerView(DATA.find(x => x.id === it.id) || Object.assign({}, it, { expires: iso }));
+    toast((quiet ? "📅 Auto-read expiry " : "Expiry set to ") + fmtD(iso) + (quiet ? " (OCR)" : " — read from the document."));
   }
 
   function docSection(it) {
@@ -1127,6 +1133,8 @@
     if ($("#dDel")) $("#dDel").onclick = () => { if (confirm("Delete this item?")) { deleteItem(it); } };
     $("#dIcs").onclick = () => exportICS(it);
     if ($("#dOcr")) $("#dOcr").onclick = () => ocrReadDate(it);
+    // Auto-read the expiry off the document the first time it's opened — no button press.
+    if (CLOUD && it.isFile && !it.expires && !(OVERLAY.ocrTried && OVERLAY.ocrTried[it.id])) setTimeout(() => ocrReadDate(it, true), 80);
     if ($("#dEmail")) $("#dEmail").onclick = () => openEmailTemplate(it);
     $("#dWatch").onclick = () => { toggleWatch(it.id); renderDrawerView(it); render(); };
     if ($("#dRenew")) $("#dRenew").onclick = () => markRenewed(it);

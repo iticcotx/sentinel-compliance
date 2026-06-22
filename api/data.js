@@ -13,14 +13,19 @@ module.exports = async (req, res) => {
   const fileUrl = url.searchParams.get("file");
   if (fileUrl) {
     try {
-      const { accessToken, docsRoot, docsPathFromUrl, encPath } = require("../lib/graph");
-      const path = docsPathFromUrl(fileUrl);
-      if (!path) { res.status(400).json({ error: "unrecognized file url" }); return; }
+      const { accessToken, GRAPH } = require("../lib/graph");
       const token = await accessToken();
-      const r = await fetch(docsRoot() + "/root:/" + encPath(path) + ":/content", { headers: { Authorization: "Bearer " + token } });
-      if (!r.ok) { res.status(r.status).json({ error: "fetch failed " + r.status }); return; }
-      const buf = Buffer.from(await r.arrayBuffer());
-      res.setHeader("Content-Type", r.headers.get("content-type") || "application/octet-stream");
+      // Resolve ANY SharePoint URL to its driveItem via the /shares endpoint (no path/drive guessing).
+      const shareId = "u!" + Buffer.from(fileUrl, "utf8").toString("base64").replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+      const di = await fetch(GRAPH + "/shares/" + shareId + "/driveItem", { headers: { Authorization: "Bearer " + token } });
+      if (!di.ok) { res.status(502).json({ error: "resolve " + di.status, detail: (await di.text()).slice(0, 200) }); return; }
+      const item = await di.json();
+      const dl = item["@microsoft.graph.downloadUrl"] || item["@content.downloadUrl"];
+      if (!dl) { res.status(502).json({ error: "no download url for item" }); return; }
+      const f = await fetch(dl);
+      if (!f.ok) { res.status(502).json({ error: "download " + f.status }); return; }
+      const buf = Buffer.from(await f.arrayBuffer());
+      res.setHeader("Content-Type", (item.file && item.file.mimeType) || f.headers.get("content-type") || "application/octet-stream");
       res.status(200).send(buf);
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
     return;
