@@ -518,7 +518,7 @@
   function renderQuickViews() {
     const base = tabItems(state.tab);
     const cnt = k => base.filter(i => {
-      if (k === "missing") return i.isFile === false;
+      if (k === "missing") return (i.isFile === false && !i.centralProof);
       if (k === "watch") return isWatched(i.id);
       return computeStatus(i).key === k;
     }).length;
@@ -829,13 +829,15 @@
     const t = el("div", "tile doc is-file s-" + s.key);
     const base = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
     const sub = showEntity ? (it.entity + (base ? " · " + base : "")) : base;
-    const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>' : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : "");
+    const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>'
+      : (it.centralProof ? '<span class="proof-badge has" title="Covered by a carrier-level policy from the COI roster">🛡 Via roster</span>'
+      : (it.isFile === false ? '<span class="proof-badge no">⚠ No proof</span>' : ""));
     // every file gets an "email me this item" icon on the tile (sends to the signed-in user)
     const mail = '<button class="tile-mail" title="Email me this item" aria-label="Email me this item">✉</button>';
     t.innerHTML = '<span class="tile-rail"></span><div class="tile-top"><div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS[iconFor(it)] + '</svg></div>' + mail + '</div>' +
       '<div class="tile-nm">' + esc(it.category) + '</div><div class="tile-meta">' + esc(sub || "") + '</div>' +
       '<div class="tile-foot"><span class="status-badge s-' + s.key + '">' + s.label + '</span>' +
-      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : (it.isFile === false ? "Awaiting upload" : "—"))) + '</span>' + proof + '</div>';
+      '<span class="tile-when">' + (it.expires ? fmtD(it.expires) : (it.permanent ? "No expiry" : ((it.isFile === false && !it.centralProof) ? "Awaiting upload" : "—"))) + '</span>' + proof + '</div>';
     const mb = t.querySelector(".tile-mail"); if (mb) mb.onclick = (e) => { e.stopPropagation(); emailGroupToSelf(it.entity + " — " + it.category, [it]); };
     t.onclick = () => openDrawer(it, false);   // click opens the side drawer; "Open in Outlook" there opens the file
     return t;
@@ -935,7 +937,8 @@
     const sub = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
     const proofBadge = it.isFile
       ? '<span class="proof-badge has" title="Proof document attached">📄 Proof</span>'
-      : (it.isFile === false ? '<span class="proof-badge no" title="No proof document attached — click to attach">⚠ No proof</span>' : "");
+      : (it.centralProof ? '<span class="proof-badge has" title="Covered by a carrier-level policy from the COI roster">🛡 Via roster</span>'
+      : (it.isFile === false ? '<span class="proof-badge no" title="No proof document attached — click to attach">⚠ No proof</span>' : ""));
     const ver = OVERLAY.verified[it.id];
     const verBadge = ver ? '<span class="proof-badge has" title="Reviewed by ' + esc(ver.by || "") + ' on ' + esc(ver.at || "") + '" style="background:#dcfce7;color:#166534;border-color:#bbf7d0">✅ Verified</span>' : "";
     row.innerHTML =
@@ -1516,7 +1519,7 @@
   // ================= GAP REPORT =================
   function openGapReport() {
     if (!unlockedItems().length) { openModal("Document gap report", LOCK_MSG); return; }
-    const missing = unlockedItems().filter(i => i.isFile === false);
+    const missing = unlockedItems().filter(i => (i.isFile === false && !i.centralProof));
     const byE = {}; missing.forEach(i => { (byE[i.entity] = byE[i.entity] || []).push(i); });
     const head = '<button class="icon-btn" id="gExport">Export CSV</button>';
     let body = '<div class="item-sub" style="margin-bottom:14px">' + missing.length + ' active items have <b>no proof document</b> attached, across ' + Object.keys(byE).length + ' providers/facilities. Use the panel’s “Attach document” to fix any.</div>';
@@ -1896,7 +1899,7 @@
     if (has("expired")) { arr = arr.filter(i => computeStatus(i).key === "expired"); used = true; }
     else if (has("critical")) { arr = arr.filter(i => computeStatus(i).key === "critical"); used = true; }
     else if (has("due") || has("expiring") || has("soon")) { arr = arr.filter(i => ["due", "critical", "expired"].indexOf(computeStatus(i).key) >= 0); used = true; }
-    if (has("missing") && (has("proof") || has("document") || has("doc"))) { arr = arr.filter(i => i.isFile === false); used = true; }
+    if (has("missing") && (has("proof") || has("document") || has("doc"))) { arr = arr.filter(i => (i.isFile === false && !i.centralProof)); used = true; }
     // month
     const mi = MONTHS.findIndex(m => has(m.slice(0, 4)) && (has(m) || true) && new RegExp(m.slice(0, 3)).test(q));
     const monthHit = MONTHS.findIndex(m => has(m));
