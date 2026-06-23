@@ -87,7 +87,16 @@
 
   // ---------- date / status engine ----------
   function today() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
-  function parseD(s) { if (!s) return null; const p = String(s).split("-"); if (p.length !== 3) { const d = new Date(s); return isNaN(d) ? null : d; } return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function parseD(s) {
+    if (!s) return null;
+    const p = String(s).split("-");
+    // Only treat as ISO YYYY-MM-DD when the parts plausibly are year/month/day; otherwise fall
+    // back to Date() parsing. Prevents "18-09-2026" being silently mis-parsed as year=18 day=2026.
+    if (p.length === 3 && +p[0] >= 1900 && +p[1] >= 1 && +p[1] <= 12 && +p[2] >= 1 && +p[2] <= 31) {
+      return new Date(+p[0], +p[1] - 1, +p[2]);
+    }
+    const d = new Date(s); return isNaN(d) ? null : d;
+  }
   function fmtD(s) { const d = parseD(s); if (!d) return "—"; return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
   function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
 
@@ -1699,7 +1708,7 @@
       : '<div class="item-sub">No documents detected in this entity’s folder.</div>';
     openModal("Attach proof document — " + esc(it.entity), '<div class="item-sub" style="margin-bottom:12px">Pick the file that proves <b>' + esc(it.category) + '</b>, or paste a path below.</div>' + fileRows +
       '<div class="drawer-actions" style="border:none;padding:14px 0 0"><input id="attachPath" placeholder="…or paste a relative path to a PDF" style="flex:2;padding:10px;border-radius:9px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)"><button class="save" id="attachManual">Attach</button></div>');
-    function apply(link) { const rec = Object.assign({}, it, { fileLink: link, isFile: /\.pdf$/i.test(link) }); saveItem(rec, false); logAudit("edit", rec, "attached document"); drawerItem = rec; closeModal(); renderDrawerView(rec); render(); toast("Document attached."); }
+    function apply(link) { const rec = Object.assign({}, it, { fileLink: link, isFile: /\.(pdf|jpe?g|png|webp|gif|tiff?|heif?c?|docx?)$/i.test(link) }); saveItem(rec, false); logAudit("edit", rec, "attached document"); drawerItem = rec; closeModal(); renderDrawerView(rec); render(); toast("Document attached."); }
     [...$("#modalInner").querySelectorAll(".pal-item")].forEach(r => r.onclick = () => apply(files[+r.dataset.i].link));
     $("#attachManual").onclick = () => { const v = $("#attachPath").value.trim(); if (v) apply(v); };
   }

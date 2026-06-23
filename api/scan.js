@@ -4,7 +4,19 @@
 // expiry by OCR (OCR.space, free) SERVER-SIDE — so dates fill in automatically, no opening.
 // Results -> _Sentinel/auto_detected.json, which /api/uploads-map merges into the dashboard.
 const { accessToken, docsRoot, docsPathFromUrl, encPath, drivePath, readJsonAt, writeJsonAt, dateFromName } = require("../lib/graph");
-const data = require("../data.json");
+// Re-read data.json fresh on each invocation (don't cache via require — warm lambdas would
+// keep a stale index, missing newly added providers/items).
+const fs = require("fs");
+const path = require("path");
+const DATA_PATH = path.join(__dirname, "..", "data.json");
+let _dataMtime = 0, _data = null;
+function getData() {
+  try {
+    const st = fs.statSync(DATA_PATH);
+    if (st.mtimeMs !== _dataMtime) { _data = JSON.parse(fs.readFileSync(DATA_PATH, "utf8")); _dataMtime = st.mtimeMs; INDEX = null; }
+  } catch (e) { if (!_data) _data = { items: [] }; }
+  return _data;
+}
 
 const STATE = drivePath("_Sentinel/scan_state.json");
 const DETECTED = drivePath("_Sentinel/auto_detected.json");
@@ -15,12 +27,15 @@ const FILE_RULES = {
   "BLS Certification": "\\bbls\\b", "State Medical License": "tmb[ ]*cert|medical license|tmb certificate|tmb[ ]+\\d",
   "Medical License Verify (annual)": "tmb[ ]*ver|tmb veri", "Individual DEA Registration": "dea[ ]*cert|dea certificate|^dea ",
   "DEA Verify (annual)": "dea[ ]*ver", "Influenza Vaccination": "flu|influenza",
-  "TB Screening": "\\btb\\b|ppd|tubercul|quantiferon|\\bcxr\\b|chest", "Driver's License": "txdl|driver|\\bdl[ ]",
+  "TB Screening": "\\btb\\b|ppd|tubercul|quantiferon|\\bcxr\\b|chest", "Driver's License": "txdl|driver|drivers? lic|\\bdl\\b",
   "NPDB Query (2 yrs)": "npdb", "OIG / SAM Exclusion Check": "oig|sam |exclusion", "NPI Verification": "nppes|\\bnpi\\b",
   "TSCA Documents": "tsca", "CME (20 hrs / 2 yrs)": "\\bcme\\b", "Delineation of Privileges (DOP)": "privilege|\\bdop\\b",
   "Peer References": "reference|peer", "Initial Application": "application|initial app",
   "CV / Resume": "\\bcv\\b|resume|curriculum", "Medical Diploma": "diploma|medical school|ecfmg",
-  "Malpractice / COI Insurance": "malpractice|certificate of insurance|\\bcoi\\b|tail coverage|policy", "Board Certification": "board|recert"
+  "Malpractice / COI Insurance": "malpractice|certificate of insurance|\\bcoi\\b|tail coverage|policy",
+  // Board cert files are commonly named ONLY by the board acronym (e.g. "ABEM_2027.pdf"),
+  // so we accept the common boards in addition to literal "board"/"recert".
+  "Board Certification": "board|recert|\\b(abem|abfm|abim|abps|aobem|aobim|aboem|abog|abpn|abs|abucm|aagp|abo|abr)\\b"
 };
 function normf(s) { return String(s).toLowerCase().replace(/_/g, " ").replace(/ii/g, "i"); }
 function extractDates(text) {
@@ -61,7 +76,7 @@ let INDEX = null;
 function index() {
   if (INDEX) return INDEX;
   const folders = {};
-  for (const it of (data.items || [])) {
+  for (const it of (getData().items || [])) {
     const rel = docsPathFromUrl(it.folderLink || it.fileLink || "");
     if (!rel) continue;
     (folders[rel] = folders[rel] || []).push(it);
@@ -107,7 +122,9 @@ module.exports = async (req, res) => {
       const j = await r.json();
       for (const v of (j.value || [])) {
         const folderRel = relFromParent((v.parentReference && v.parentReference.path) || "");
-        if (!folderRel || folderRel.indexOf("Sentinel/") < 0) continue;
+        // Only the Sentinel tree, case-insensitive + boundary-anchored, and skip archive subpaths.
+        if (!folderRel || !/(^|\/)Sentinel(\/|$)/i.test(folderRel)) continue;
+        if (/(^|\/)(zz?\.|old[_ ]|expired|\.inactive)/i.test(folderRel)) continue;
         if (!v.file && !v.deleted) continue;
         const it = matchItem(folderRel, v.name || "");
         if (!it) continue;
@@ -122,7 +139,7 @@ module.exports = async (req, res) => {
 
     // Background OCR: read the expiry for ONE not-yet-read document (keeps each run < 10s).
     let ocrChanged = false, ocred = null;
-    const byId = {}; for (const it of (data.items || [])) byId[it.id] = it;
+    const byId = {}; for (const it of (getData().items || [])) byId[it.id] = it;
     for (const id in detected) {
       if (Date.now() - start > 5500) break;
       const d = detected[id];
