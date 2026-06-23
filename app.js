@@ -646,7 +646,12 @@
     if (!state.openPhases) state.openPhases = {};
     const buckets = order.map(() => []);
     const extra = [];
-    items.forEach(it => { const i = ofMap[it.category]; if (i == null) extra.push(it); else buckets[i].push(it); });
+    items.forEach(it => {
+      // Honor an explicit phaseIdx (set by the gap-fill scanner) so supplemental files
+      // bucket under their folder section even though their category is just the filename.
+      let i = (typeof it.phaseIdx === "number") ? it.phaseIdx : ofMap[it.category];
+      if (i == null || i >= order.length) extra.push(it); else buckets[i].push(it);
+    });
     const sections = order.map(([label], i) => ({ label, list: buckets[i] }));
     if (extra.length) sections.push({ label: otherLabel || "Other", list: extra });
     const worstOf = list => list.map(i => computeStatus(i).key).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0];
@@ -826,7 +831,7 @@
   }
   function docTile(it, showEntity) {
     const s = computeStatus(it);
-    const t = el("div", "tile doc is-file s-" + s.key);
+    const t = el("div", "tile doc is-file s-" + s.key + (it.supplemental ? " supp" : ""));
     const base = [it.authority, it.number ? "#" + it.number : ""].filter(Boolean).join(" · ");
     const sub = showEntity ? (it.entity + (base ? " · " + base : "")) : base;
     const proof = it.isFile ? '<span class="proof-badge has">📄 Proof</span>'
@@ -905,14 +910,23 @@
       c.appendChild(entityHeader(entity, items, tab));
       if (state.drill.length === 1 && sg) {
         const buckets = sg.order.map(() => []); const extra = [];
-        items.forEach(it => { const idx = sg.of[it.category]; if (idx == null) extra.push(it); else buckets[idx].push(it); });
+        items.forEach(it => {
+          // Honor phaseIdx (set by the gap-fill scanner) so supplemental files bucket under
+          // their folder section instead of "Other".
+          const idx = (typeof it.phaseIdx === "number") ? it.phaseIdx : sg.of[it.category];
+          if (idx == null || idx >= sg.order.length) extra.push(it); else buckets[idx].push(it);
+        });
         sg.order.forEach(([label], idx) => grid.appendChild(sectionTile(label, buckets[idx], entity)));
         if (extra.length) grid.appendChild(sectionTile(sg.other, extra, entity));
       } else {
         let docs = items;
         if (sg && state.drill.length === 2) {
           const secLabel = state.drill[1];
-          docs = items.filter(it => { const idx = sg.of[it.category]; return (idx == null ? sg.other : sg.order[idx][0]) === secLabel; });
+          docs = items.filter(it => {
+            // Use phaseIdx (gap-fill supplementals) first, else fall back to category lookup.
+            const idx = (typeof it.phaseIdx === "number") ? it.phaseIdx : sg.of[it.category];
+            return (idx == null || idx >= sg.order.length ? sg.other : sg.order[idx][0]) === secLabel;
+          });
         }
         sortDocs(docs).forEach(it => grid.appendChild(docTile(it)));
         if (!docs.length) grid.innerHTML = '<div class="hempty">No documents here yet.</div>';
