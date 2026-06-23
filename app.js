@@ -791,7 +791,7 @@
   function entityTile(name, items, tab) {
     const gs = statsFor(items);
     const isProv = tab === "provider";
-    const onFile = items.filter(i => i.isFile).length;
+    const onFile = items.filter(i => i.isFile || i.centralProof).length;
     const t = el("div", "tile is-folder s-" + worstKey(items) + (onFile ? "" : " nofiles"));
     const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
       : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
@@ -810,7 +810,7 @@
     const t = el("div", "tile sec is-folder s-" + (n ? worstKey(items) : "none") + (n ? "" : " empty"));
     const num = (label.match(/^\d+/) || [""])[0];
     const nameOnly = label.replace(/^\d+\.\s*/, "");
-    const onFile = items.filter(i => i.isFile).length;
+    const onFile = items.filter(i => i.isFile || i.centralProof).length;
     if (n && !onFile) t.classList.add("nofiles");
     const pills = gs ? ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("") : "";
     const mail = (n && items[0].scope !== "provider") ? '<button class="tile-mail" title="Email me this folder" aria-label="Email me this folder">✉</button>' : '';
