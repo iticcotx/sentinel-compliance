@@ -4,6 +4,7 @@
   "private": true,
   "description": "Sentinel — Compliance Command Center (cloud build)",
   "dependencies": {
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "exceljs": "^4.4.0"
   }
 }
