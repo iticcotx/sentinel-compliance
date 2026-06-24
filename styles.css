@@ -326,6 +326,18 @@ select.ctrl, .seg { background:var(--surface-solid); border:1px solid var(--hair
 /* ---- required-field marker + error highlight (email composer) ---- */
 .req { color:var(--st-expired); font-weight:800; }
 input.err, .etf.err { border-color:var(--st-expired) !important; box-shadow:0 0 0 3px rgba(220,38,38,.16) !important; }
+
+/* "+ Add provider" tile (admins) */
+.tile.tile-add { background:linear-gradient(160deg,var(--teal-50),var(--surface-solid));
+  border:2px dashed var(--teal-300); display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:8px; padding:18px; color:var(--accent); }
+.tile.tile-add:hover { border-color:var(--accent); box-shadow:var(--shadow-lg); transform:translateY(-5px); }
+.tile.tile-add .add-plus { font-size:42px; line-height:1; font-weight:300; }
+.tile.tile-add .tile-nm { color:var(--accent); }
+.tile.tile-add .tile-meta { text-align:center; }
+/* Danger variant for destructive admin actions */
+.icon-btn.danger { color:var(--st-expired); border-color:var(--st-expired-bd); }
+.icon-btn.danger:hover { background:var(--st-expired-bg); border-color:var(--st-expired); }
 .ocr-status { margin-top:10px; padding:9px 12px; border-radius:10px; font-size:12.5px; font-weight:600;
   background:var(--teal-50); color:var(--teal-700); border:1px solid var(--teal-300); }
 [data-theme="dark"] .ocr-status { background:rgba(20,184,166,.10); }

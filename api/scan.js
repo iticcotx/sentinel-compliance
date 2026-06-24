@@ -178,6 +178,27 @@ module.exports = async (req, res) => {
         // Only the Sentinel tree, case-insensitive + boundary-anchored, and skip archive subpaths.
         if (!folderRel || !/(^|\/)Sentinel(\/|$)/i.test(folderRel)) continue;
         if (/(^|\/)(zz?\.|old[_ ]|expired|\.inactive)/i.test(folderRel)) continue;
+        // Folder events: a new/deleted Provider/<Name>/ folder updates the master Excel roster.
+        // The folder appears as a Graph item with .folder set, parented at the Provider directory.
+        if (v.folder && /(^|\/)Sentinel\/Provider$/i.test(folderRel)) {
+          const name = String(v.name || "").trim();
+          // Skip system / test / placeholder names so a stray folder doesn't pollute the roster.
+          if (!name || /^[._]/.test(name) || /^(test|temp|new folder|untitled)/i.test(name) || /Imad Aijaz/i.test(name)) continue;
+          try {
+            const xl = require("../lib/excel");
+            const parts = name.split(/\s+/);
+            const last = parts[parts.length - 1] || name;
+            const first = parts.slice(0, -1).join(" ") || "";
+            if (v.deleted) {
+              const row = await xl.findRow(token, xl.SHEET_ACTIVE, last, first);
+              if (row) await xl.moveRow(token, xl.SHEET_ACTIVE, row.rowIndex, xl.SHEET_INACTIVE);
+            } else {
+              const dup = await xl.findAnywhere(token, last, first);
+              if (!dup) await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
+            }
+          } catch (e) { /* swallow — surfacing in the response below */ }
+          continue;
+        }
         if (!v.file && !v.deleted) continue;
         const it = matchItem(folderRel, v.name || "");
         if (it) {

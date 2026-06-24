@@ -862,7 +862,7 @@
     wrap.innerHTML = '<div class="ent-ic">' + (isProv ? esc(initials(name)) : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:20px;height:20px">' + ICONS.building + '</svg>') + '</div>' +
       '<div class="ent-info"><div class="ent-nm">' + esc(name) + '</div><div class="ent-meta">' + items.length + ' tracked items</div></div>' +
       '<div class="ent-actions">' + (isProv
-        ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>'
+        ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>' + (isAdmin() ? '<button class="icon-btn danger" data-a="delprov" title="Move this provider to Inactive Providers in the roster">🗑 Delete provider</button>' : "")
         : '<button class="icon-btn" data-a="email">✉ Email</button><button class="icon-btn" data-a="binder">🗂 Binder</button>') + '</div>';
     const it0 = items[0] || {};
     const bind = (a, fn) => { const b = wrap.querySelector('[data-a="' + a + '"]'); if (b) b.onclick = fn; };
@@ -870,7 +870,46 @@
     bind("portal", () => openProviderPortal(it0.entityKey, name));
     bind("binder", () => printBinder(name));
     bind("email", () => emailGroupToSelf(name, items));
+    bind("delprov", () => removeProviderFromRoster(name));
     return wrap;
+  }
+  function isAdmin() { return CLOUD && window.SENTINEL_AUTH && window.SENTINEL_AUTH.admin && !READONLY; }
+  function splitName(full) {
+    const cleaned = String(full || "").replace(/[\*,()]+/g, "").trim();
+    const parts = cleaned.split(/\s+/);
+    if (parts.length < 2) return { first: "", last: parts[0] || "" };
+    return { first: parts.slice(0, -1).join(" "), last: parts[parts.length - 1] };
+  }
+  function addProviderToRoster() {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    openModal("Add provider to roster",
+      '<div class="item-sub" style="margin-bottom:10px">Writes a new row to the <b>WCGTX Credentials</b> sheet of the master Excel. Their tracked items will appear after the next dashboard refresh.</div>' +
+      '<div class="dl">First name <span class="req">*</span></div><input id="pAddF" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink);margin-bottom:8px">' +
+      '<div class="dl">Last name <span class="req">*</span></div><input id="pAddL" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink);margin-bottom:8px">' +
+      '<div class="dl">Email (optional)</div><input id="pAddE" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink);margin-bottom:12px">' +
+      '<div class="drawer-actions" style="border:none;padding:0"><button class="save" id="pAddGo">Add to roster</button></div>');
+    $("#pAddGo").onclick = () => {
+      const f = $("#pAddF").value.trim(), l = $("#pAddL").value.trim(), em = $("#pAddE").value.trim();
+      $("#pAddF").classList.toggle("err", !f); $("#pAddL").classList.toggle("err", !l);
+      if (!f || !l) { toast("First and last name are required."); return; }
+      toast("Writing to the master roster…");
+      fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined }) })
+        .then(r => r.json())
+        .then(d => { if (d.ok) { closeModal(); toast("✓ Added to roster (row " + d.rowIndex + "). Dashboard refreshes within an hour."); }
+                     else { toast("Add failed: " + (d.error || "unknown")); } })
+        .catch(e => toast("Add failed: " + (e.message || e)));
+    };
+  }
+  function removeProviderFromRoster(name) {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    const { first, last } = splitName(name);
+    if (!confirm('Move "' + name + '" to Inactive Providers in the master Excel?\n\nTheir records stay in the dashboard but the provider is marked inactive going forward. You can re-activate later by editing the Excel directly.')) return;
+    toast("Updating the master roster…");
+    fetch("/api/data?roster=remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last }) })
+      .then(r => r.json())
+      .then(d => { if (d.ok) { toast("✓ Moved to inactive. Dashboard refreshes within an hour."); navigate([]); }
+                   else { toast("Remove failed: " + (d.error || "unknown")); } })
+      .catch(e => toast("Remove failed: " + (e.message || e)));
   }
   function renderHierarchy(c, arr, tab) {
     if (!state.drill || state._drillTab !== tab) { state.drill = []; state._drillTab = tab; }
@@ -910,6 +949,12 @@
       sortDocs(scoped).forEach(it => grid.appendChild(docTile(it, !state.drill.length)));
       if (!scoped.length) grid.innerHTML = '<div class="hempty">No matches for “' + esc(state.search) + '”. Try fewer words.</div>';
     } else if (state.drill.length === 0) {
+      if (tab === "provider" && isAdmin()) {
+        const add = el("div", "tile tile-add");
+        add.innerHTML = '<div class="add-plus">＋</div><div class="tile-nm">Add provider</div><div class="tile-meta">Writes a new row to the master Excel roster</div>';
+        add.onclick = addProviderToRoster;
+        grid.appendChild(add);
+      }
       sortedEntityNames(groups).forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
       if (!grid.children.length) grid.innerHTML = '<div class="hempty">No matching items.</div>';
     } else {
