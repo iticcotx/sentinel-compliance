@@ -870,7 +870,7 @@
     bind("portal", () => openProviderPortal(it0.entityKey, name));
     bind("binder", () => printBinder(name));
     bind("email", () => emailGroupToSelf(name, items));
-    bind("delprov", () => removeProviderFromRoster(name));
+    bind("delprov", () => removeProviderFromRoster(name, it0.entityKey));
     return wrap;
   }
   function isAdmin() { return CLOUD && window.SENTINEL_AUTH && window.SENTINEL_AUTH.admin && !READONLY; }
@@ -907,12 +907,13 @@
         .catch(e => toast("Add failed: " + (e.message || e)));
     };
   }
-  function removeProviderFromRoster(name) {
+  function removeProviderFromRoster(name, entityKey) {
     if (!isAdmin()) { toast("Admins only."); return; }
     const { first, last } = splitName(name);
     if (!confirm('Move "' + name + '" to Inactive Providers in the master Excel?\n\nTheir records stay in the dashboard but the provider is marked inactive going forward. You can re-activate later by editing the Excel directly.')) return;
     toast("Updating the master roster…");
-    fetch("/api/data?roster=remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last }) })
+    // Pass entityKey so the server can match the row regardless of how the display name splits.
+    fetch("/api/data?roster=remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last, entityKey: entityKey || "" }) })
       .then(r => r.json())
       .then(d => {
         if (!d.ok) {
