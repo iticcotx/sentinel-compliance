@@ -106,7 +106,16 @@ module.exports = async (req, res) => {
         if (!found) {
           const inact = await xl.findRow(token, xl.SHEET_INACTIVE, last, first);
           if (inact) { res.status(409).json({ error: "already inactive" }); return; }
-          res.status(404).json({ error: "not found in roster" }); return;
+          // Build a diagnostic showing what we looked up + the first few last-names in the sheet
+          const sh = await xl.readSheet(token, xl.SHEET_ACTIVE);
+          const sample = (sh.values || []).slice(1, 12).map(r => ({ last: r[0], first: r[1] })).filter(x => x.last);
+          res.status(404).json({
+            error: "not found in roster",
+            tried: { last, first },
+            sample,
+            hint: "Check that the provider's name appears in the first two columns of the WCGTX Credentials sheet."
+          });
+          return;
         }
         await xl.moveRow(token, xl.SHEET_ACTIVE, found.rowIndex, xl.SHEET_INACTIVE);
         res.status(200).json({ ok: true, action: "moved to inactive", fromRow: found.rowIndex });

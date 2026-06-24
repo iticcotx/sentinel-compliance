@@ -915,7 +915,14 @@
     fetch("/api/data?roster=remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last }) })
       .then(r => r.json())
       .then(d => {
-        if (!d.ok) { toast("Remove failed: " + (d.error || "unknown")); return; }
+        if (!d.ok) {
+          let msg = "Remove failed: " + (d.error || "unknown");
+          if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '"';
+          if (d.sample && d.sample.length) msg += "\nSample rows from sheet: " + d.sample.slice(0, 3).map(r => r.last + ", " + r.first).join(" | ");
+          console.warn("[delete provider]", d);
+          toast(msg);
+          return;
+        }
         toast("✓ Moved to inactive. Refreshing dashboard…");
         return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
           return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ "+name+" marked inactive."); }});
