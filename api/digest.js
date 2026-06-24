@@ -60,8 +60,31 @@ module.exports = async (req, res) => {
       return;
     }
     // GET = scheduled cron: email each allowed person their own tabs
+    // Also: regenerate the roster delta so the dashboard picks up Excel changes within ~24h.
+    let regenInfo = null;
+    try {
+      const xl = require("../lib/excel");
+      const { accessToken, drivePath, writeJsonAt } = require("../lib/graph");
+      const tok = await accessToken();
+      const [act, inact] = await Promise.all([xl.readSheet(tok, xl.SHEET_ACTIVE), xl.readSheet(tok, xl.SHEET_INACTIVE)]);
+      const slug = (l, f) => (l + "-" + f).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+      const namesFrom = sh => (sh.values || []).slice(1)
+        .map(r => ({ last: String((r[0] || "")).replace(/[\*,()]+/g, "").trim(), first: String((r[1] || "")).trim() }))
+        .filter(x => x.last);
+      const liveActive = namesFrom(act);
+      const liveInactive = namesFrom(inact);
+      const liveActiveKeys = new Set(liveActive.map(p => slug(p.last, p.first)));
+      const liveInactiveKeys = new Set(liveInactive.map(p => slug(p.last, p.first)));
+      const seedKeys = new Set((data.items || []).filter(i => i.scope === "provider").map(i => i.entityKey));
+      const newProviders = liveActive.filter(p => !seedKeys.has(slug(p.last, p.first)));
+      const inactivated = (data.items || []).filter(i => i.scope === "provider" && i.active && liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
+      const removed = (data.items || []).filter(i => i.scope === "provider" && i.active && !liveActiveKeys.has(i.entityKey) && !liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
+      const delta = { generatedAt: new Date().toISOString(), newProviders, inactivated: [...new Set(inactivated)], removed: [...new Set(removed)] };
+      await writeJsonAt(tok, drivePath("_Sentinel/roster_delta.json"), delta);
+      regenInfo = { newProviders: newProviders.length, inactivated: delta.inactivated.length, removed: delta.removed.length };
+    } catch (e) { regenInfo = { error: String(e.message || e).slice(0, 200) }; }
     const users = await getUsers();
     for (const u of users) { try { await send(u.email, (u.tabs && u.tabs.length) ? u.tabs : ["provider", "facility", "other"]); } catch (e) {} }
-    res.status(200).json({ ok: true, sent: users.length });
+    res.status(200).json({ ok: true, sent: users.length, regen: regenInfo });
   } catch (e) { res.status(200).json({ ok: false, message: String(e.message || e) }); }
 };
