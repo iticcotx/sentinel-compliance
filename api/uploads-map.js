@@ -6,6 +6,7 @@ const { accessToken, readJsonAt, writeJsonAt, drivePath, dateFromName } = requir
 
 const UPLOADS = drivePath("_Sentinel/uploads.json");
 const DETECTED = drivePath("_Sentinel/auto_detected.json");
+const SUPP = drivePath("_Sentinel/supplemental_detected.json");
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,7 +17,7 @@ module.exports = async (req, res) => {
   try {
     const token = await accessToken();
     if (req.method === "GET") {
-      const [detected, uploads] = await Promise.all([readJsonAt(token, DETECTED), readJsonAt(token, UPLOADS)]);
+      const [detected, uploads, suppMap] = await Promise.all([readJsonAt(token, DETECTED), readJsonAt(token, UPLOADS), readJsonAt(token, SUPP)]);
       // QR uploads win for url/name, but keep a date from EITHER source (so a server-OCR'd
       // expiry in auto_detected isn't lost when an older uploads.json entry has no date).
       const merged = Object.assign({}, detected || {});
@@ -26,7 +27,10 @@ module.exports = async (req, res) => {
         merged[id] = Object.assign({}, prev, u[id]);
         if (!merged[id].date && prev.date) merged[id].date = prev.date;
       }
-      res.status(200).json(merged);
+      // Supplemental new-file records (no matching tracked item) — full records, the
+      // dashboard merges them into DATA at runtime so they appear without a regenerate.
+      const supp = Object.values(suppMap || {});
+      res.status(200).json({ attachments: merged, supplemental: supp });
       return;
     }
     if (req.method === "POST") {

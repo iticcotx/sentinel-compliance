@@ -20,6 +20,58 @@ function getData() {
 
 const STATE = drivePath("_Sentinel/scan_state.json");
 const DETECTED = drivePath("_Sentinel/auto_detected.json");
+const SUPP = drivePath("_Sentinel/supplemental_detected.json");   // new-file supplemental records
+
+const SOP_PHASES = [
+  "1. Application & Document Collection", "2. Primary Source Verification",
+  "3. Background & Compliance Review", "4. Medical Staff Review",
+  "5. Payer Enrollment & Facility Setup", "6. Approval & Ongoing Monitoring",
+];
+const STATE_SECTIONS = [
+  "01. Licensing & Regulatory Compliance", "02. Personnel Files & Credentialing",
+  "03. Medical Staff Services", "04. Patient Care & Clinical Documentation",
+  "05. Medication Management", "06. Crash Cart & Emergency Equipment",
+  "07. Infection Prevention & Control", "08. Laboratory Services",
+  "09. Radiology Services", "10. Quality Improvement Program",
+  "11. Environment of Care", "12. Emergency Preparedness",
+  "13. Patient Rights & Compliance", "14. Daily Readiness Walkthrough",
+];
+
+function slug() {
+  return Array.from(arguments).join("-").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 90);
+}
+function cleanTitle(fn) {
+  let base = fn.replace(/\.[^.]+$/, "");
+  base = base.replace(/[_\s]+\d{1,4}[_\-.]\d{1,2}[_\-.]\d{1,4}.*$/, "").trim();
+  return (base.replace(/_/g, " ").replace(/^[-_.,\s]+|[-_.,\s]+$/g, "")) || fn.replace(/\.[^.]+$/, "");
+}
+function isArchivedPath(rel) {
+  const p = "/" + String(rel || "").toLowerCase().replace(/\\/g, "/") + "/";
+  return /\/(z\.|zz|old[ _]|expired|\.inactive)/.test(p);
+}
+// Given a Sentinel-relative folder path like "Sama Farooqui/Sentinel/Provider/Afia Umber/1. Application..."
+// return { entity, entityKey, scope, phaseIdx, sectionLabel } if recognizable, else null.
+function deriveEntity(folderRel) {
+  const m = folderRel.match(/Sentinel\/(.+)$/);
+  if (!m) return null;
+  const parts = m[1].split("/").filter(Boolean);
+  if (parts[0] === "Provider" && parts.length >= 3) {
+    const entity = parts[1];
+    const phase = parts[2];
+    const idx = SOP_PHASES.indexOf(phase);
+    if (idx < 0) return null;
+    return { scope: "provider", entity, entityKey: slug(entity.split(" ").reverse().join(" ")), phaseIdx: idx, sectionLabel: phase };
+  }
+  if (parts[0] === "State Readiness" && parts.length >= 3) {
+    const fac = parts[1], sect = parts[2];
+    const idx = STATE_SECTIONS.indexOf(sect);
+    if (idx < 0) return null;
+    const entity = fac === "Castle Hills" ? "Castle Hills ER" : (fac === "Frisco" ? "Frisco ER" : null);
+    if (!entity) return null;
+    return { scope: "facility", entity, entityKey: slug(entity), phaseIdx: idx, sectionLabel: sect };
+  }
+  return null;
+}
 const OCR_KEY = process.env.OCR_SPACE_KEY || "helloworld";
 
 const FILE_RULES = {
@@ -114,7 +166,8 @@ module.exports = async (req, res) => {
       return;
     }
     const detected = (await readJsonAt(token, DETECTED)) || {};
-    let next = state.deltaLink, deltaLink = null, changed = 0, pages = 0;
+    const supplemental = (await readJsonAt(token, SUPP)) || {};   // url -> full record
+    let next = state.deltaLink, deltaLink = null, changed = 0, suppChanged = 0, pages = 0;
     const start = Date.now();
     while (next && pages < 8 && Date.now() - start < 4000) {   // keep delta short, leave time for one OCR
       const r = await fetch(next, { headers: { Authorization: "Bearer " + token } });
@@ -127,14 +180,55 @@ module.exports = async (req, res) => {
         if (/(^|\/)(zz?\.|old[_ ]|expired|\.inactive)/i.test(folderRel)) continue;
         if (!v.file && !v.deleted) continue;
         const it = matchItem(folderRel, v.name || "");
-        if (!it) continue;
-        if (v.deleted) { if (detected[it.id] && detected[it.id].name === v.name) { delete detected[it.id]; changed++; } }
-        else { detected[it.id] = Object.assign({}, detected[it.id], { url: v.webUrl || "", name: v.name, date: dateFromName(v.name) || (detected[it.id] || {}).date || null }); changed++; }
+        if (it) {
+          if (v.deleted) { if (detected[it.id] && detected[it.id].name === v.name) { delete detected[it.id]; changed++; } }
+          else { detected[it.id] = Object.assign({}, detected[it.id], { url: v.webUrl || "", name: v.name, date: dateFromName(v.name) || (detected[it.id] || {}).date || null }); changed++; }
+          continue;
+        }
+        // No tracked item matched this file — surface it as a supplemental record so the
+        // dashboard still shows it (within the 45-second live-sync, no regen required).
+        const ent = deriveEntity(folderRel);
+        if (!ent) continue;
+        const key = v.webUrl || ((v.parentReference && v.parentReference.path) || "") + "/" + (v.name || "");
+        if (v.deleted) {
+          if (supplemental[key]) { delete supplemental[key]; suppChanged++; }
+          continue;
+        }
+        const ext = (v.name || "").toLowerCase().match(/\.([a-z0-9]+)$/);
+        const supportedExts = ["pdf","jpg","jpeg","png","webp","gif","tif","tiff","heic","heif","doc","docx","xls","xlsx","ppt","pptx"];
+        if (!ext || !supportedExts.includes(ext[1])) continue;
+        const expFromName = dateFromName(v.name || "");
+        const rec = {
+          id: slug(ent.entityKey, "supp", (v.name || "").replace(/\.[^.]+$/, "")),
+          scope: ent.scope,
+          entity: ent.entity,
+          entityKey: ent.entityKey,
+          category: cleanTitle(v.name || ""),
+          sectionLabel: ent.sectionLabel,
+          phaseIdx: ent.phaseIdx,
+          authority: "",
+          number: "",
+          issued: null,
+          expires: expFromName || null,
+          renewalLeadDays: ent.scope === "facility" ? 90 : 60,
+          owner: ent.scope === "provider" ? ent.entity : "",
+          fileLink: v.webUrl || "",
+          folderLink: v.webUrl ? v.webUrl.split("/").slice(0, -1).join("/") : "",
+          isFile: true,
+          supplemental: true,
+          liveAdded: true,
+          permanent: !expFromName,
+          active: true,
+          notes: "Supplemental document (detected live by background scan)",
+        };
+        supplemental[key] = rec;
+        suppChanged++;
       }
       next = j["@odata.nextLink"]; deltaLink = j["@odata.deltaLink"] || deltaLink; pages++;
     }
     // Save delta progress BEFORE the (slower) OCR step so nothing is lost on timeout.
     if (changed) await writeJsonAt(token, DETECTED, detected);
+    if (suppChanged) await writeJsonAt(token, SUPP, supplemental);
     await writeJsonAt(token, STATE, { deltaLink: deltaLink || next || state.deltaLink, driveTag: "docs-v1" });
 
     // Background OCR: read the expiry for ONE not-yet-read document (keeps each run < 10s).
@@ -153,7 +247,7 @@ module.exports = async (req, res) => {
     }
     if (ocrChanged) await writeJsonAt(token, DETECTED, detected);
 
-    res.status(200).json({ ok: true, changed, items: Object.keys(detected).length, ocr: ocred });
+    res.status(200).json({ ok: true, changed, suppChanged, items: Object.keys(detected).length, suppItems: Object.keys(supplemental).length, ocr: ocred });
   } catch (e) {
     res.status(200).json({ ok: false, message: String(e.message || e) });
   }

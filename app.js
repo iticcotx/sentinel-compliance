@@ -125,16 +125,24 @@
     return "in " + st.days + "d";
   }
 
+  // Live-detected supplemental records from /api/uploads-map (new files in SharePoint that
+  // aren't yet in the baked data.json — surfaced without a regenerate).
+  let LIVE_SUPP = [];
+
   // ---------- data assembly ----------
   function buildData() {
     const seed = (window.SENTINEL_SEED && window.SENTINEL_SEED.items) || [];
     const del = new Set(OVERLAY.deleted);
     const out = [];
+    const seedIds = new Set();
     seed.forEach(it => {
       if (del.has(it.id)) return;
+      seedIds.add(it.id);
       out.push(OVERLAY.edits[it.id] ? Object.assign({}, it, OVERLAY.edits[it.id]) : it);
     });
-    (OVERLAY.added || []).forEach(it => { if (!del.has(it.id)) out.push(it); });
+    (OVERLAY.added || []).forEach(it => { if (!del.has(it.id)) { seedIds.add(it.id); out.push(it); } });
+    // Append live supplementals not already represented in the seed (avoid double-listing).
+    LIVE_SUPP.forEach(it => { if (it && it.id && !seedIds.has(it.id) && !del.has(it.id)) out.push(it); });
     DATA = out;
   }
 
@@ -1862,14 +1870,20 @@
   }
   function applyUploads(u) {
     if (!u) return;
+    // /api/uploads-map now returns { attachments, supplemental }. Old shape (a flat map
+    // keyed by item id) is still accepted for the local Python relay.
+    const attachments = (u && u.attachments) ? u.attachments : u;
+    const supp = (u && Array.isArray(u.supplemental)) ? u.supplemental : [];
     DATA.forEach(it => {
-      const v = u[it.id]; if (!v) return;
+      const v = attachments && attachments[it.id]; if (!v) return;
       const url = (typeof v === "string") ? v : v.url; if (!url) return;
       it.fileLink = url; it.isFile = true; it.uploaded = true;
       if (typeof v === "object" && v.name) it.uploadName = v.name;
-      // #6: if a date was read from the uploaded file's name, use it as the expiry.
       if (typeof v === "object" && v.date && !OVERLAY.edits[it.id]) { it.expires = v.date; it.permanent = false; it.pending = false; it.expiresAuto = true; }
     });
+    // Replace LIVE_SUPP with the freshly received supplementals (handles adds + deletes).
+    LIVE_SUPP = supp;
+    buildData();
   }
   function handleDeepLink() {
     const m = /[#&]item=([^&]+)/.exec(location.hash); if (!m) return;
