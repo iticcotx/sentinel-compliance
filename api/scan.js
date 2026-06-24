@@ -191,10 +191,10 @@ module.exports = async (req, res) => {
             const first = parts.slice(0, -1).join(" ") || "";
             if (v.deleted) {
               const row = await xl.findRow(token, xl.SHEET_ACTIVE, last, first);
-              if (row) await xl.moveRow(token, xl.SHEET_ACTIVE, row.rowIndex, xl.SHEET_INACTIVE);
+              if (row) { await xl.snapshotWorkbook(token, "scan-folder-deleted"); await xl.moveRow(token, xl.SHEET_ACTIVE, row.rowIndex, xl.SHEET_INACTIVE); }
             } else {
               const dup = await xl.findAnywhere(token, last, first);
-              if (!dup) await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
+              if (!dup) { await xl.snapshotWorkbook(token, "scan-folder-added"); await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]); }
             }
           } catch (e) { /* swallow — surfacing in the response below */ }
           continue;

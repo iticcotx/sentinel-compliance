@@ -93,6 +93,7 @@ module.exports = async (req, res) => {
       if (rosterAction === "add") {
         const dup = await xl.findAnywhere(token, last, first);
         if (dup) { res.status(409).json({ error: "already present", in: dup.sheet, row: dup.rowIndex }); return; }
+        await xl.snapshotWorkbook(token, "before-add");   // backup before every write
         const result = await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
         // also append the email (if provided) to the COI roster so reminders/etc reach them
         if (b.email && b.email.includes("@")) {
@@ -122,6 +123,7 @@ module.exports = async (req, res) => {
           });
           return;
         }
+        await xl.snapshotWorkbook(token, "before-remove");
         await xl.moveRow(token, xl.SHEET_ACTIVE, found.rowIndex, xl.SHEET_INACTIVE);
         res.status(200).json({ ok: true, action: "moved to inactive", fromRow: found.rowIndex });
         return;
