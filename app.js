@@ -895,8 +895,15 @@
       toast("Writing to the master roster…");
       fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined }) })
         .then(r => r.json())
-        .then(d => { if (d.ok) { closeModal(); toast("✓ Added to roster (row " + d.rowIndex + "). Dashboard refreshes within an hour."); }
-                     else { toast("Add failed: " + (d.error || "unknown")); } })
+        .then(d => {
+          if (!d.ok) { toast("Add failed: " + (d.error || "unknown")); return; }
+          closeModal(); toast("✓ Added to roster. Refreshing dashboard…");
+          // Trigger an instant regen so the new provider appears now, not at next cron run.
+          return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
+            // Re-fetch /api/data and rebuild
+            return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); render(); toast("✓ "+f+" "+l+" added — dashboard updated."); }});
+          });
+        })
         .catch(e => toast("Add failed: " + (e.message || e)));
     };
   }
@@ -907,8 +914,13 @@
     toast("Updating the master roster…");
     fetch("/api/data?roster=remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last }) })
       .then(r => r.json())
-      .then(d => { if (d.ok) { toast("✓ Moved to inactive. Dashboard refreshes within an hour."); navigate([]); }
-                   else { toast("Remove failed: " + (d.error || "unknown")); } })
+      .then(d => {
+        if (!d.ok) { toast("Remove failed: " + (d.error || "unknown")); return; }
+        toast("✓ Moved to inactive. Refreshing dashboard…");
+        return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
+          return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ "+name+" marked inactive."); }});
+        });
+      })
       .catch(e => toast("Remove failed: " + (e.message || e)));
   }
   function renderHierarchy(c, arr, tab) {
