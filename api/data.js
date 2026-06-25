@@ -102,6 +102,53 @@ module.exports = async (req, res) => {
         res.status(200).json({ ok: true, action: "added", sheet: xl.SHEET_ACTIVE, rowIndex: result.rowIndex });
         return;
       }
+      if (rosterAction === "trash") {
+        // GET-style action (also accept POST) — list currently trashed providers
+        const { readJsonAt, drivePath } = require("../lib/graph");
+        const trash = (await readJsonAt(token, drivePath("_Sentinel/trash.json"))) || { entries: [] };
+        res.status(200).json(trash);
+        return;
+      }
+      if (rosterAction === "restore") {
+        const id = String(b.id || "").trim();
+        if (!id) { res.status(400).json({ error: "id required" }); return; }
+        const { readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
+        const trashPath = drivePath("_Sentinel/trash.json");
+        const trash = (await readJsonAt(token, trashPath)) || { entries: [] };
+        const entry = (trash.entries || []).find(e => e.id === id);
+        if (!entry) { res.status(404).json({ error: "trash entry not found" }); return; }
+        await xl.snapshotWorkbook(token, "before-restore");
+        // Restore to the Credentials sheet using the saved row values.
+        for (const r of (entry.rows || [])) await xl.restoreRow(token, xl.SHEET_ACTIVE, r.values);
+        trash.entries = trash.entries.filter(e => e.id !== id);
+        await writeJsonAt(token, trashPath, trash);
+        res.status(200).json({ ok: true, action: "restored", entity: entry.entity });
+        return;
+      }
+      if (rosterAction === "delete") {
+        // HARD DELETE: remove from BOTH Credentials and Inactive, log to trash.json for recovery.
+        const entityKey = String(b.entityKey || "").trim();
+        await xl.snapshotWorkbook(token, "before-delete");
+        const removed = await xl.hardDelete(token, entityKey, last, first);
+        if (!removed.length) { res.status(404).json({ error: "not found in roster", tried: { last, first, entityKey } }); return; }
+        // Log to trash so the user can recover from "Recycle bin".
+        const { readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
+        const trashPath = drivePath("_Sentinel/trash.json");
+        const trash = (await readJsonAt(token, trashPath)) || { entries: [] };
+        const id = "tr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        trash.entries = (trash.entries || []).filter(e => e.entityKey !== entityKey);   // dedupe
+        trash.entries.unshift({
+          id, entityKey,
+          entity: ((first || "") + " " + (last || "")).trim() || (removed[0].values && removed[0].values.slice(0, 2).filter(Boolean).reverse().join(" ")),
+          deletedAt: new Date().toISOString(),
+          deletedBy: s ? s.email : "system",
+          rows: removed,
+        });
+        if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
+        await writeJsonAt(token, trashPath, trash);
+        res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id });
+        return;
+      }
       if (rosterAction === "remove") {
         // Prefer entityKey when sent (no name-splitting ambiguity); fall back to last/first.
         const entityKey = String(b.entityKey || "").trim();

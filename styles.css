@@ -335,6 +335,11 @@ input.err, .etf.err { border-color:var(--st-expired) !important; box-shadow:0 0 
 .tile.tile-add .add-plus { font-size:42px; line-height:1; font-weight:300; }
 .tile.tile-add .tile-nm { color:var(--accent); }
 .tile.tile-add .tile-meta { text-align:center; }
+.tile.tile-add.tile-bin { background:linear-gradient(160deg,#fef2f2,var(--surface-solid));
+  border-color:#fecaca; color:#dc2626; }
+.tile.tile-add.tile-bin:hover { border-color:#dc2626; }
+.tile.tile-add.tile-bin .tile-nm { color:#dc2626; }
+.tile.tile-add.tile-bin .add-plus { font-size:34px; }
 /* Danger variant for destructive admin actions */
 .icon-btn.danger { color:var(--st-expired); border-color:var(--st-expired-bd); }
 .icon-btn.danger:hover { background:var(--st-expired-bg); border-color:var(--st-expired); }

@@ -862,7 +862,8 @@
     wrap.innerHTML = '<div class="ent-ic">' + (isProv ? esc(initials(name)) : '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:20px;height:20px">' + ICONS.building + '</svg>') + '</div>' +
       '<div class="ent-info"><div class="ent-nm">' + esc(name) + '</div><div class="ent-meta">' + items.length + ' tracked items</div></div>' +
       '<div class="ent-actions">' + (isProv
-        ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>' + (isAdmin() ? '<button class="icon-btn danger" data-a="delprov" title="Move this provider to Inactive Providers in the roster">🗑 Delete provider</button>' : "")
+        ? '<button class="icon-btn" data-a="pemail">✉ Email provider</button><button class="icon-btn" data-a="portal">🔗 Portal</button><button class="icon-btn" data-a="binder">🗂 Binder</button>' +
+          (isAdmin() ? '<button class="icon-btn" data-a="inact" title="Move to Inactive Providers (keeps the row, marks inactive)">📦 Mark inactive</button><button class="icon-btn danger" data-a="delprov" title="Permanently delete from the roster (recoverable from Recycle bin)">🗑 Delete</button>' : "")
         : '<button class="icon-btn" data-a="email">✉ Email</button><button class="icon-btn" data-a="binder">🗂 Binder</button>') + '</div>';
     const it0 = items[0] || {};
     const bind = (a, fn) => { const b = wrap.querySelector('[data-a="' + a + '"]'); if (b) b.onclick = fn; };
@@ -870,7 +871,8 @@
     bind("portal", () => openProviderPortal(it0.entityKey, name));
     bind("binder", () => printBinder(name));
     bind("email", () => emailGroupToSelf(name, items));
-    bind("delprov", () => removeProviderFromRoster(name, it0.entityKey));
+    bind("inact", () => removeProviderFromRoster(name, it0.entityKey));    // moves to Inactive sheet
+    bind("delprov", () => deleteProviderHard(name, it0.entityKey));         // hard delete + trash
     return wrap;
   }
   function isAdmin() { return CLOUD && window.SENTINEL_AUTH && window.SENTINEL_AUTH.admin && !READONLY; }
@@ -906,6 +908,52 @@
         })
         .catch(e => toast("Add failed: " + (e.message || e)));
     };
+  }
+  function deleteProviderHard(name, entityKey) {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    const { first, last } = splitName(name);
+    if (!confirm('PERMANENTLY DELETE "' + name + '" from the roster?\n\nThis removes them from BOTH WCGTX Credentials and Inactive Providers sheets in the master Excel. The row is logged to the Recycle bin and can be restored within ~200 deletes.\n\nUse "📦 Mark inactive" if you just want to deactivate them.')) return;
+    toast("Deleting from the master roster…");
+    fetch("/api/data?roster=delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last, entityKey: entityKey || "" }) })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) { let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return; }
+        toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + "). Refreshing…");
+        return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
+          return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ " + name + " permanently deleted. Recoverable from Recycle bin."); }});
+        });
+      })
+      .catch(e => toast("Delete failed: " + (e.message || e)));
+  }
+  function openRecycleBin() {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    toast("Loading recycle bin…");
+    fetch("/api/data?roster=trash").then(r => r.json()).then(t => {
+      const entries = (t && t.entries) || [];
+      const body = entries.length
+        ? '<div class="item-sub" style="margin-bottom:12px">Deleted providers. They\'re still in the Excel <b>roster_backups</b> folder and the most recent 200 are listed here. Click <b>Restore</b> to put them back into the active Credentials sheet.</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px">' +
+          entries.map(e => '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);border-radius:10px;background:var(--surface-solid)">' +
+            '<div style="flex:1"><div style="font-weight:700">' + esc(e.entity || "(unnamed)") + '</div>' +
+            '<div class="item-sub" style="font-size:12px">deleted ' + esc(new Date(e.deletedAt).toLocaleString()) + ' by ' + esc(e.deletedBy || "—") + ' · ' + (e.rows ? e.rows.length : 0) + ' row(s)</div></div>' +
+            '<button class="icon-btn" data-rid="' + esc(e.id) + '">↺ Restore</button></div>').join("") +
+          '</div>'
+        : '<div class="empty" style="padding:30px"><h3>Recycle bin is empty</h3><p>Providers you delete (via the 🗑 Delete button) appear here.</p></div>';
+      openModal("Recycle bin (deleted providers)", body);
+      [...$("#modalInner").querySelectorAll("[data-rid]")].forEach(b => b.onclick = () => {
+        const id = b.dataset.rid;
+        if (!confirm("Restore this provider to the active roster?")) return;
+        b.disabled = true; b.textContent = "Restoring…";
+        fetch("/api/data?roster=restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) })
+          .then(r => r.json()).then(d => {
+            if (!d.ok) { toast("Restore failed: " + (d.error || "unknown")); b.disabled = false; b.textContent = "↺ Restore"; return; }
+            closeModal(); toast("✓ Restored " + d.entity + ". Refreshing…");
+            return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
+              return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); render(); }});
+            });
+          }).catch(e => toast("Restore failed: " + (e.message || e)));
+      });
+    }).catch(() => toast("Couldn't load recycle bin."));
   }
   function removeProviderFromRoster(name, entityKey) {
     if (!isAdmin()) { toast("Admins only."); return; }
@@ -974,6 +1022,10 @@
         add.innerHTML = '<div class="add-plus">＋</div><div class="tile-nm">Add provider</div><div class="tile-meta">Writes a new row to the master Excel roster</div>';
         add.onclick = addProviderToRoster;
         grid.appendChild(add);
+        const bin = el("div", "tile tile-add tile-bin");
+        bin.innerHTML = '<div class="add-plus">🗑</div><div class="tile-nm">Recycle bin</div><div class="tile-meta">Restore providers you\'ve deleted</div>';
+        bin.onclick = openRecycleBin;
+        grid.appendChild(bin);
       }
       sortedEntityNames(groups).forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
       if (!grid.children.length) grid.innerHTML = '<div class="hempty">No matching items.</div>';
