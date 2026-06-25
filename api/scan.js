@@ -190,8 +190,26 @@ module.exports = async (req, res) => {
             const last = parts[parts.length - 1] || name;
             const first = parts.slice(0, -1).join(" ") || "";
             if (v.deleted) {
-              const row = await xl.findRow(token, xl.SHEET_ACTIVE, last, first);
-              if (row) { await xl.snapshotWorkbook(token, "scan-folder-deleted"); await xl.moveRow(token, xl.SHEET_ACTIVE, row.rowIndex, xl.SHEET_INACTIVE); }
+              // Folder removed from SharePoint -> HARD delete the roster row(s) and log to
+              // Recycle bin so the dashboard reflects it immediately (no "Inactive" middle step).
+              await xl.snapshotWorkbook(token, "scan-folder-deleted");
+              const slugFn = (l, f) => (l + "-" + (f || "")).replace(/[\*,()]+/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+              const ekey = slugFn(last, first);
+              const removed = await xl.hardDelete(token, ekey, last, first);
+              if (removed.length) {
+                const trashPath = drivePath("_Sentinel/trash.json");
+                const trash = (await readJsonAt(token, trashPath)) || { entries: [] };
+                if (ekey) trash.entries = (trash.entries || []).filter(e => e.entityKey !== ekey);
+                trash.entries.unshift({
+                  id: "tr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8),
+                  entityKey: ekey, entity: name,
+                  deletedAt: new Date().toISOString(),
+                  deletedBy: "scan/folder-watcher",
+                  rows: removed,
+                });
+                if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
+                await writeJsonAt(token, trashPath, trash);
+              }
             } else {
               const dup = await xl.findAnywhere(token, last, first);
               if (!dup) { await xl.snapshotWorkbook(token, "scan-folder-added"); await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]); }

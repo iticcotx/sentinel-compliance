@@ -138,11 +138,18 @@ module.exports = async (req, res) => {
         return;
       }
       if (rosterAction === "delete") {
-        // HARD DELETE: remove from BOTH Credentials and Inactive, log to trash.json for recovery.
+        // HARD DELETE: remove from BOTH Credentials and Inactive, ALSO delete the provider's
+        // SharePoint folder (Sentinel/Provider/<name>/), log to trash.json for recovery.
         const entityKey = String(b.entityKey || "").trim();
         const snap = await xl.snapshotWorkbook(token, "before-delete");
         const removed = await xl.hardDelete(token, entityKey, last, first);
         if (!removed.length) { res.status(404).json({ error: "not found in roster", tried: { last, first, entityKey } }); return; }
+        // Delete the SharePoint Provider/<name>/ folder. Build the folder name from the row we
+        // just removed (col 1 = last, col 2 = first) — matches whatever's in the Excel exactly.
+        const r0 = removed[0].values;
+        const folderName = ((r0 && r0[1]) ? r0[1] + " " : "") + (r0 ? r0[0] : "");
+        const { deleteProviderFolder } = require("../lib/graph");
+        const folderDel = await deleteProviderFolder(token, folderName.trim());
         // Log to trash so the user can recover from "Recycle bin".
         const { readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
         const trashPath = drivePath("_Sentinel/trash.json");
@@ -164,12 +171,11 @@ module.exports = async (req, res) => {
           if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
           await writeJsonAt(token, trashPath, trash);
           trashEntryCount = trash.entries.length;
-          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount, snapshot: snap });
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount, snapshot: snap, folder: folderDel });
           return;
         } catch (te) {
           trashWriteError = String(te.message || te).slice(0, 200);
-          // Delete already happened — surface the trash failure so the user knows recovery is harder.
-          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, warning: "trash log failed: " + trashWriteError, trashEntries: trashEntryCount, snapshot: snap });
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, warning: "trash log failed: " + trashWriteError, trashEntries: trashEntryCount, snapshot: snap, folder: folderDel });
           return;
         }
       }

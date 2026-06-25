@@ -932,9 +932,10 @@
       .then(d => {
         if (!d.ok) { let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return; }
         console.log("[delete provider]", d);
-        const snapMsg = d.snapshot && d.snapshot.ok ? (" backup ✓ " + d.snapshot.method) : (d.snapshot ? (" backup ✗ " + (d.snapshot.error || "")) : "");
-        if (d.warning) toast("⚠ Deleted but " + d.warning + snapMsg);
-        else toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + ", trash has " + (d.trashEntries || 0) + ")." + snapMsg);
+        const snapMsg = d.snapshot && d.snapshot.ok ? (" backup ✓") : (d.snapshot ? (" backup ✗ " + (d.snapshot.error || "")) : "");
+        const folderMsg = d.folder && d.folder.ok ? (d.folder.note ? "" : " folder ✓") : (d.folder ? (" folder ✗ " + (d.folder.status || "") + " " + (d.folder.error || "")) : "");
+        if (d.warning) toast("⚠ Deleted but " + d.warning + snapMsg + folderMsg);
+        else toast("✓ Deleted (" + d.removedRows + " row, trash " + (d.trashEntries || 0) + ")" + snapMsg + folderMsg);
         return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
           return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ " + name + " permanently deleted. Recoverable from Recycle bin."); }});
         });
