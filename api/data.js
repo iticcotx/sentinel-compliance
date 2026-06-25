@@ -91,8 +91,20 @@ module.exports = async (req, res) => {
       const first = String(b.first || "").trim();
       if (!last) { res.status(400).json({ error: "last name required" }); return; }
       if (rosterAction === "add") {
-        const dup = await xl.findAnywhere(token, last, first);
-        if (dup) { res.status(409).json({ error: "already present", in: dup.sheet, row: dup.rowIndex }); return; }
+        // Only block dups in the ACTIVE sheet — if the same name exists in Inactive Providers,
+        // they were deactivated and the user can legitimately re-add. Force=true bypasses
+        // even the active-sheet check (for true duplicate-named providers).
+        if (!b.force) {
+          const dup = await xl.findRow(token, xl.SHEET_ACTIVE, last, first);
+          if (dup) {
+            res.status(409).json({
+              error: "already present in active roster",
+              row: dup.rowIndex,
+              hint: "Send {force:true} to add a second row with the same name."
+            });
+            return;
+          }
+        }
         await xl.snapshotWorkbook(token, "before-add");   // backup before every write
         const result = await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
         // also append the email (if provided) to the COI roster so reminders/etc reach them
@@ -134,20 +146,32 @@ module.exports = async (req, res) => {
         // Log to trash so the user can recover from "Recycle bin".
         const { readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
         const trashPath = drivePath("_Sentinel/trash.json");
-        const trash = (await readJsonAt(token, trashPath)) || { entries: [] };
-        const id = "tr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-        trash.entries = (trash.entries || []).filter(e => e.entityKey !== entityKey);   // dedupe
-        trash.entries.unshift({
-          id, entityKey,
-          entity: ((first || "") + " " + (last || "")).trim() || (removed[0].values && removed[0].values.slice(0, 2).filter(Boolean).reverse().join(" ")),
-          deletedAt: new Date().toISOString(),
-          deletedBy: s ? s.email : "system",
-          rows: removed,
-        });
-        if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
-        await writeJsonAt(token, trashPath, trash);
-        res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id });
-        return;
+        let trashWriteError = null;
+        let trashEntryCount = 0;
+        try {
+          const trash = (await readJsonAt(token, trashPath)) || { entries: [] };
+          const id = "tr_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+          // Only dedupe by entityKey when it's non-empty (an empty key would match every empty key).
+          if (entityKey) trash.entries = (trash.entries || []).filter(e => e.entityKey !== entityKey);
+          else trash.entries = trash.entries || [];
+          trash.entries.unshift({
+            id, entityKey: entityKey || null,
+            entity: ((first || "") + " " + (last || "")).trim() || (removed[0].values && [removed[0].values[1], removed[0].values[0]].filter(Boolean).join(" ")),
+            deletedAt: new Date().toISOString(),
+            deletedBy: s ? s.email : "system",
+            rows: removed,
+          });
+          if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
+          await writeJsonAt(token, trashPath, trash);
+          trashEntryCount = trash.entries.length;
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount });
+          return;
+        } catch (te) {
+          trashWriteError = String(te.message || te).slice(0, 200);
+          // Delete already happened — surface the trash failure so the user knows recovery is harder.
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, warning: "trash log failed: " + trashWriteError, trashEntries: trashEntryCount });
+          return;
+        }
       }
       if (rosterAction === "remove") {
         // Prefer entityKey when sent (no name-splitting ambiguity); fall back to last/first.

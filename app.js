@@ -895,10 +895,24 @@
       $("#pAddF").classList.toggle("err", !f); $("#pAddL").classList.toggle("err", !l);
       if (!f || !l) { toast("First and last name are required."); return; }
       toast("Writing to the master roster…");
-      fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined }) })
+      addProviderRequest(f, l, em, false);
+    };
+  }
+  function addProviderRequest(f, l, em, force) {
+    fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined, force: !!force }) })
         .then(r => r.json())
         .then(d => {
-          if (!d.ok) { toast("Add failed: " + (d.error || "unknown")); return; }
+          if (!d.ok) {
+            // 409: name already present in the active sheet. Offer to add anyway (true duplicate name).
+            if (/already present/i.test(d.error || "")) {
+              if (confirm('"' + f + " " + l + '" is already in the active roster.\n\nAdd a second row with the same name anyway? (Use this only for true duplicate-named providers — the dashboard will treat them as one entity.)')) {
+                addProviderRequest(f, l, em, true);
+                return;
+              }
+              toast("Add cancelled."); return;
+            }
+            toast("Add failed: " + (d.error || "unknown")); return;
+          }
           closeModal(); toast("✓ Added to roster. Refreshing dashboard…");
           // Trigger an instant regen so the new provider appears now, not at next cron run.
           return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
@@ -907,7 +921,6 @@
           });
         })
         .catch(e => toast("Add failed: " + (e.message || e)));
-    };
   }
   function deleteProviderHard(name, entityKey) {
     if (!isAdmin()) { toast("Admins only."); return; }
@@ -918,7 +931,8 @@
       .then(r => r.json())
       .then(d => {
         if (!d.ok) { let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return; }
-        toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + "). Refreshing…");
+        if (d.warning) { console.warn("[delete provider]", d); toast("⚠ Deleted but " + d.warning); }
+        else toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + ", trash has " + (d.trashEntries || 0) + "). Refreshing…");
         return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
           return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ " + name + " permanently deleted. Recoverable from Recycle bin."); }});
         });
