@@ -913,7 +913,8 @@
             }
             toast("Add failed: " + (d.error || "unknown")); return;
           }
-          closeModal(); toast("✓ Added to roster. Refreshing dashboard…");
+          const folderMsg = d.folder && d.folder.ok ? " folder ✓" : (d.folder ? " folder ✗ " + (d.folder.error || "") : "");
+          closeModal(); toast("✓ Added to roster." + folderMsg + " Refreshing dashboard…");
           // Trigger an instant regen so the new provider appears now, not at next cron run.
           return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
             // Re-fetch /api/data and rebuild

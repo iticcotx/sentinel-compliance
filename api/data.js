@@ -110,11 +110,24 @@ module.exports = async (req, res) => {
         }
         const snap = await xl.snapshotWorkbook(token, "before-add");
         const result = await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
-        // also append the email (if provided) to the COI roster so reminders/etc reach them
+        // Also append email to COI roster so reminders reach them
         if (b.email && b.email.includes("@")) {
           try { await xl.appendRow(token, "WCGTX COI Roster", [last, first, null, String(b.email).trim()]); } catch (e) {}
         }
-        res.status(200).json({ ok: true, action: "added", sheet: xl.SHEET_ACTIVE, rowIndex: result.rowIndex, snapshot: snap });
+        // ALSO create the SharePoint folder Sentinel/Provider/<First Last>/ so uploads/QR work
+        // and it shows up in OneDrive immediately. Symmetric with the delete handler which
+        // removes the folder. Failure here doesn't roll back the Excel write — folder will be
+        // created later on first file upload via ensureFolderIn anyway.
+        let folderCreate = null;
+        try {
+          const { ensureFolderIn, docsRoot } = require("../lib/graph");
+          const folderName = ((first || "") + " " + (last || "")).trim();
+          if (folderName) {
+            await ensureFolderIn(token, docsRoot(), "Sama Farooqui/Sentinel/Provider/" + folderName);
+            folderCreate = { ok: true, name: folderName };
+          }
+        } catch (e) { folderCreate = { ok: false, error: String(e.message || e).slice(0, 200) }; }
+        res.status(200).json({ ok: true, action: "added", sheet: xl.SHEET_ACTIVE, rowIndex: result.rowIndex, snapshot: snap, folder: folderCreate });
         return;
       }
       if (rosterAction === "trash") {
