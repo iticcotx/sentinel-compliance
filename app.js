@@ -948,9 +948,9 @@
     fetch("/api/data?roster=trash").then(r => r.json()).then(t => {
       console.log("[recycle bin] raw response:", t);
       const entries = (t && t.entries) || [];
-      const debugBlock = '<details style="margin-top:14px;padding:8px 12px;border:1px solid var(--hair);border-radius:8px;background:var(--surface-solid)">' +
-        '<summary style="cursor:pointer;font-size:12px;color:var(--ink-2)">Raw server response (paste this if recycle bin looks wrong)</summary>' +
-        '<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;margin-top:8px;color:var(--ink-2)">' + esc(JSON.stringify(t, null, 2)) + '</pre></details>';
+      const debugBlock = '<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--hair);border-radius:8px;background:var(--surface-solid)">' +
+        '<div style="font-size:12px;color:var(--ink-3);margin-bottom:6px"><b>Raw server response</b> (paste this if recycle bin looks wrong):</div>' +
+        '<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;color:var(--ink-2);max-height:200px;overflow:auto;margin:0">' + esc(JSON.stringify(t, null, 2)) + '</pre></div>';
       const body = entries.length
         ? '<div class="item-sub" style="margin-bottom:12px">Deleted providers. The most recent 200 are listed here. Click <b>Restore</b> to put them back into the active Credentials sheet.</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px">' +
