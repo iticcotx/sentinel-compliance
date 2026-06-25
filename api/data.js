@@ -182,50 +182,12 @@ module.exports = async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const tabs = (s.tabs && s.tabs.length) ? s.tabs : ["provider", "facility", "other"];
   let items = (data.items || []).filter(i => tabs.includes(i.scope));
-  // Merge the live roster delta written by the hourly cron — surfaces Excel-roster changes
-  // (additions / inactivations) without a code redeploy.
-  try {
-    const { accessToken, drivePath, readJsonAt } = require("../lib/graph");
-    const token = await accessToken();
-    const delta = await readJsonAt(token, drivePath("_Sentinel/roster_delta.json"));
-    if (delta && tabs.includes("provider")) {
-      const inactSet = new Set(delta.inactivated || []);
-      const goneSet = new Set(delta.removed || []);
-      // Mark inactivated providers; remove fully-removed ones.
-      items = items.filter(i => !(i.scope === "provider" && goneSet.has(i.entityKey)));
-      items.forEach(i => { if (i.scope === "provider" && inactSet.has(i.entityKey)) i.active = false; });
-      // Append placeholder records for brand-new providers in the Excel.
-      const CRED = [
-        ["State Medical License","Texas Medical Board",90], ["Individual DEA Registration","DEA",60],
-        ["ACLS Certification","AHA",60], ["ATLS Certification","ACS",60], ["PALS Certification","AHA",60],
-        ["BLS Certification","AHA",60], ["Board Certification","Specialty Board",180],
-        ["Driver's License","Texas DPS",30], ["Medical Diploma","Medical School",0],
-        ["Influenza Vaccination","Employee Health",14], ["TB Screening","Employee Health",60],
-        ["CME (20 hrs / 2 yrs)","TMB / CME",60], ["TSCA Documents","WCGTX",60],
-        ["NPDB Query (2 yrs)","NPDB",60], ["OIG / SAM Exclusion Check","OIG",14],
-        ["NPI Verification","NPPES",0], ["Initial Application","WCGTX",0],
-        ["CV / Resume","WCGTX",0], ["Delineation of Privileges (DOP)","WCGTX",0],
-        ["Peer References","WCGTX",0], ["Malpractice / COI Insurance","Carrier",60],
-      ];
-      const slug = (l, f) => (l + "-" + f).replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
-      const existingKeys = new Set(items.filter(i => i.scope === "provider").map(i => i.entityKey));
-      (delta.newProviders || []).forEach(p => {
-        const ekey = slug(p.last, p.first || "");
-        if (existingKeys.has(ekey)) return;
-        const entity = ((p.first || "") + " " + p.last).trim();
-        CRED.forEach(([cat, auth, lead]) => {
-          items.push({
-            id: slug(ekey, cat), scope: "provider", entity, entityKey: ekey,
-            category: cat, authority: auth, renewalLeadDays: lead,
-            expires: null, pending: true, isFile: false, active: true,
-            fileLink: null, folderLink: null, owner: entity,
-            notes: "New provider — awaiting roster data + uploads",
-            liveAdded: true,
-          });
-        });
-      });
-    }
-  } catch (e) { /* roster delta is optional — failures shouldn't break /api/data */ }
+  // Merge the live roster delta — surfaces Excel-roster changes without a code redeploy.
+  // Placeholders carry a SharePoint folderLink so the QR/upload flow works immediately.
+  if (tabs.includes("provider")) {
+    const { applyRosterDelta } = require("../lib/delta");
+    items = await applyRosterDelta(items);
+  }
   const keys = new Set(items.map(i => i.entityKey));
   const entityFiles = {};
   for (const k in (data.entityFiles || {})) if (keys.has(k)) entityFiles[k] = data.entityFiles[k];
