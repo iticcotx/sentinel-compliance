@@ -931,8 +931,10 @@
       .then(r => r.json())
       .then(d => {
         if (!d.ok) { let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return; }
-        if (d.warning) { console.warn("[delete provider]", d); toast("⚠ Deleted but " + d.warning); }
-        else toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + ", trash has " + (d.trashEntries || 0) + "). Refreshing…");
+        console.log("[delete provider]", d);
+        const snapMsg = d.snapshot && d.snapshot.ok ? (" backup ✓ " + d.snapshot.method) : (d.snapshot ? (" backup ✗ " + (d.snapshot.error || "")) : "");
+        if (d.warning) toast("⚠ Deleted but " + d.warning + snapMsg);
+        else toast("✓ Deleted (" + d.removedRows + " row" + (d.removedRows === 1 ? "" : "s") + ", trash has " + (d.trashEntries || 0) + ")." + snapMsg);
         return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
           return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ " + name + " permanently deleted. Recoverable from Recycle bin."); }});
         });

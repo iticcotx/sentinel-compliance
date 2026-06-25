@@ -105,13 +105,13 @@ module.exports = async (req, res) => {
             return;
           }
         }
-        await xl.snapshotWorkbook(token, "before-add");   // backup before every write
+        const snap = await xl.snapshotWorkbook(token, "before-add");
         const result = await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]);
         // also append the email (if provided) to the COI roster so reminders/etc reach them
         if (b.email && b.email.includes("@")) {
           try { await xl.appendRow(token, "WCGTX COI Roster", [last, first, null, String(b.email).trim()]); } catch (e) {}
         }
-        res.status(200).json({ ok: true, action: "added", sheet: xl.SHEET_ACTIVE, rowIndex: result.rowIndex });
+        res.status(200).json({ ok: true, action: "added", sheet: xl.SHEET_ACTIVE, rowIndex: result.rowIndex, snapshot: snap });
         return;
       }
       if (rosterAction === "trash") {
@@ -140,7 +140,7 @@ module.exports = async (req, res) => {
       if (rosterAction === "delete") {
         // HARD DELETE: remove from BOTH Credentials and Inactive, log to trash.json for recovery.
         const entityKey = String(b.entityKey || "").trim();
-        await xl.snapshotWorkbook(token, "before-delete");
+        const snap = await xl.snapshotWorkbook(token, "before-delete");
         const removed = await xl.hardDelete(token, entityKey, last, first);
         if (!removed.length) { res.status(404).json({ error: "not found in roster", tried: { last, first, entityKey } }); return; }
         // Log to trash so the user can recover from "Recycle bin".
@@ -164,12 +164,12 @@ module.exports = async (req, res) => {
           if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
           await writeJsonAt(token, trashPath, trash);
           trashEntryCount = trash.entries.length;
-          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount });
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount, snapshot: snap });
           return;
         } catch (te) {
           trashWriteError = String(te.message || te).slice(0, 200);
           // Delete already happened — surface the trash failure so the user knows recovery is harder.
-          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, warning: "trash log failed: " + trashWriteError, trashEntries: trashEntryCount });
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, warning: "trash log failed: " + trashWriteError, trashEntries: trashEntryCount, snapshot: snap });
           return;
         }
       }
