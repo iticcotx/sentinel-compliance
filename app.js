@@ -946,16 +946,20 @@
     if (!isAdmin()) { toast("Admins only."); return; }
     toast("Loading recycle bin…");
     fetch("/api/data?roster=trash").then(r => r.json()).then(t => {
+      console.log("[recycle bin] raw response:", t);
       const entries = (t && t.entries) || [];
+      const debugBlock = '<details style="margin-top:14px;padding:8px 12px;border:1px solid var(--hair);border-radius:8px;background:var(--surface-solid)">' +
+        '<summary style="cursor:pointer;font-size:12px;color:var(--ink-2)">Raw server response (paste this if recycle bin looks wrong)</summary>' +
+        '<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;margin-top:8px;color:var(--ink-2)">' + esc(JSON.stringify(t, null, 2)) + '</pre></details>';
       const body = entries.length
-        ? '<div class="item-sub" style="margin-bottom:12px">Deleted providers. They\'re still in the Excel <b>roster_backups</b> folder and the most recent 200 are listed here. Click <b>Restore</b> to put them back into the active Credentials sheet.</div>' +
+        ? '<div class="item-sub" style="margin-bottom:12px">Deleted providers. The most recent 200 are listed here. Click <b>Restore</b> to put them back into the active Credentials sheet.</div>' +
           '<div style="display:flex;flex-direction:column;gap:8px">' +
           entries.map(e => '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);border-radius:10px;background:var(--surface-solid)">' +
             '<div style="flex:1"><div style="font-weight:700">' + esc(e.entity || "(unnamed)") + '</div>' +
             '<div class="item-sub" style="font-size:12px">deleted ' + esc(new Date(e.deletedAt).toLocaleString()) + ' by ' + esc(e.deletedBy || "—") + ' · ' + (e.rows ? e.rows.length : 0) + ' row(s)</div></div>' +
             '<button class="icon-btn" data-rid="' + esc(e.id) + '">↺ Restore</button></div>').join("") +
-          '</div>'
-        : '<div class="empty" style="padding:30px"><h3>Recycle bin is empty</h3><p>Providers you delete (via the 🗑 Delete button) appear here.</p></div>';
+          '</div>' + debugBlock
+        : '<div class="empty" style="padding:30px"><h3>Recycle bin is empty</h3><p>Either no providers have been hard-deleted, OR the trash write is failing. Expand the debug block below to see the raw server response.</p></div>' + debugBlock;
       openModal("Recycle bin (deleted providers)", body);
       [...$("#modalInner").querySelectorAll("[data-rid]")].forEach(b => b.onclick = () => {
         const id = b.dataset.rid;
