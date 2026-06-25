@@ -168,6 +168,7 @@ module.exports = async (req, res) => {
     const detected = (await readJsonAt(token, DETECTED)) || {};
     const supplemental = (await readJsonAt(token, SUPP)) || {};   // url -> full record
     let next = state.deltaLink, deltaLink = null, changed = 0, suppChanged = 0, pages = 0;
+    const folderErrors = [];   // surface folder-watch failures (e.g. trash write) instead of swallowing
     const start = Date.now();
     while (next && pages < 8 && Date.now() - start < 4000) {   // keep delta short, leave time for one OCR
       const r = await fetch(next, { headers: { Authorization: "Bearer " + token } });
@@ -183,7 +184,7 @@ module.exports = async (req, res) => {
         if (v.folder && /(^|\/)Sentinel\/Provider$/i.test(folderRel)) {
           const name = String(v.name || "").trim();
           // Skip system / test / placeholder names so a stray folder doesn't pollute the roster.
-          if (!name || /^[._]/.test(name) || /^(test|temp|new folder|untitled)/i.test(name) || /Imad Aijaz/i.test(name)) continue;
+          if (!name || /^[._]/.test(name) || /^(test|temp|new folder|untitled)/i.test(name)) continue;
           try {
             const xl = require("../lib/excel");
             const parts = name.split(/\s+/);
@@ -214,7 +215,7 @@ module.exports = async (req, res) => {
               const dup = await xl.findAnywhere(token, last, first);
               if (!dup) { await xl.snapshotWorkbook(token, "scan-folder-added"); await xl.appendRow(token, xl.SHEET_ACTIVE, [last, first]); }
             }
-          } catch (e) { /* swallow — surfacing in the response below */ }
+          } catch (e) { folderErrors.push({ name, error: String(e.message || e).slice(0, 200) }); }
           continue;
         }
         if (!v.file && !v.deleted) continue;
@@ -286,7 +287,7 @@ module.exports = async (req, res) => {
     }
     if (ocrChanged) await writeJsonAt(token, DETECTED, detected);
 
-    res.status(200).json({ ok: true, changed, suppChanged, items: Object.keys(detected).length, suppItems: Object.keys(supplemental).length, ocr: ocred });
+    res.status(200).json({ ok: true, changed, suppChanged, items: Object.keys(detected).length, suppItems: Object.keys(supplemental).length, ocr: ocred, folderErrors });
   } catch (e) {
     res.status(200).json({ ok: false, message: String(e.message || e) });
   }

@@ -26,6 +26,9 @@ async function resolveDownloadUrl(token, GRAPH, fileUrl) {
 }
 
 module.exports = async (req, res) => {
+  // Never let the edge/CDN cache a roster or trash response — a stale empty
+  // ?roster=trash read was making the Recycle bin look empty after a delete.
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   const url = new URL(req.url, "http://localhost");
   // Vercel crons (no user session) are allowed to hit ?regen=1 only.
   const isCron = /vercel-cron/i.test(req.headers["user-agent"] || "");
@@ -171,7 +174,11 @@ module.exports = async (req, res) => {
           if (trash.entries.length > 200) trash.entries = trash.entries.slice(0, 200);
           await writeJsonAt(token, trashPath, trash);
           trashEntryCount = trash.entries.length;
-          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount, snapshot: snap, folder: folderDel });
+          // Read the file straight back so the toast reports what actually persisted, not just
+          // what we tried to write. If this comes back 0 the write isn't sticking (path/perm).
+          let trashVerified = null;
+          try { const rb = await readJsonAt(token, trashPath); trashVerified = ((rb && rb.entries) || []).length; } catch (ve) { trashVerified = "read-back failed: " + String(ve.message || ve).slice(0, 120); }
+          res.status(200).json({ ok: true, action: "deleted", removedRows: removed.length, trashId: id, trashEntries: trashEntryCount, trashVerified, trashPath, snapshot: snap, folder: folderDel });
           return;
         } catch (te) {
           trashWriteError = String(te.message || te).slice(0, 200);

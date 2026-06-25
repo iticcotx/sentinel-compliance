@@ -934,8 +934,9 @@
         console.log("[delete provider]", d);
         const snapMsg = d.snapshot && d.snapshot.ok ? (" backup ✓") : (d.snapshot ? (" backup ✗ " + (d.snapshot.error || "")) : "");
         const folderMsg = d.folder && d.folder.ok ? (d.folder.note ? "" : " folder ✓") : (d.folder ? (" folder ✗ " + (d.folder.status || "") + " " + (d.folder.error || "")) : "");
+        var vmsg = (d.trashVerified === undefined || d.trashVerified === null) ? "" : (", verified " + d.trashVerified);
         if (d.warning) toast("⚠ Deleted but " + d.warning + snapMsg + folderMsg);
-        else toast("✓ Deleted (" + d.removedRows + " row, trash " + (d.trashEntries || 0) + ")" + snapMsg + folderMsg);
+        else toast("✓ Deleted (" + d.removedRows + " row, trash " + (d.trashEntries || 0) + vmsg + ")" + snapMsg + folderMsg);
         return fetch("/api/data?regen=1", { method: "POST" }).catch(()=>{}).then(()=>{
           return fetch("/api/data").then(r=>r.json()).then(d=>{ if(d&&d.items){window.SENTINEL_SEED=d; buildData(); navigate([]); render(); toast("✓ " + name + " permanently deleted. Recoverable from Recycle bin."); }});
         });
