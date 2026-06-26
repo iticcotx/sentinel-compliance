@@ -947,7 +947,7 @@
   function openRecycleBin() {
     if (!isAdmin()) { toast("Admins only."); return; }
     toast("Loading recycle bin…");
-    fetch("/api/data?roster=trash").then(r => r.json()).then(t => {
+    fetch("/api/data?roster=trash&_t=" + Date.now(), { cache: "no-store" }).then(r => r.json()).then(t => {
       console.log("[recycle bin] raw response:", t);
       const entries = (t && t.entries) || [];
       const debugBlock = '<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--hair);border-radius:8px;background:var(--surface-solid)">' +
