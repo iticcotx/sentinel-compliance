@@ -156,26 +156,6 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
-  // TEMP diagnostic: dump roster sheet column headers + sample rows. Remove after.
-  const peek = new URL(req.url, "http://localhost").searchParams.get("peek");
-  if (peek === "cols") {
-    try {
-      const token = await accessToken();
-      const xl = require("../lib/excel");
-      const out = {};
-      for (const sheet of [xl.SHEET_ACTIVE, "WCGTX COI Roster", xl.SHEET_INACTIVE]) {
-        try {
-          const sh = await xl.readSheet(token, sheet);
-          const header = (sh.values || [])[0] || [];
-          // find a data row that actually has some values past the name columns
-          const sample = (sh.values || []).slice(1).find(r => r.slice(2).some(c => c != null && String(c).trim())) || (sh.values || [])[1] || [];
-          out[sheet] = { columns: header.map((h, i) => i + ":" + (h == null ? "" : String(h).slice(0, 40))), sampleRow: sample.map(c => c == null ? "" : String(c).slice(0, 30)) };
-        } catch (e) { out[sheet] = "err " + String(e.message || e).slice(0, 80); }
-      }
-      res.status(200).json(out);
-    } catch (e) { res.status(200).json({ ok: false, error: String(e.message || e) }); }
-    return;
-  }
   try {
     const token = await accessToken();
     const state = (await readJsonAt(token, STATE)) || {};
@@ -190,6 +170,7 @@ module.exports = async (req, res) => {
     const supplemental = (await readJsonAt(token, SUPP)) || {};   // url -> full record
     let next = state.deltaLink, deltaLink = null, changed = 0, suppChanged = 0, pages = 0;
     const folderErrors = [];   // surface folder-watch failures (e.g. trash write) instead of swallowing
+    const dateUpdates = [];     // {entityKey,category,date} to auto-fill into the Credentials sheet (empty cells only)
     const start = Date.now();
     while (next && pages < 8 && Date.now() - start < 4000) {   // keep delta short, leave time for one OCR
       const r = await fetch(next, { headers: { Authorization: "Bearer " + token } });
@@ -243,7 +224,13 @@ module.exports = async (req, res) => {
         const it = matchItem(folderRel, v.name || "");
         if (it) {
           if (v.deleted) { if (detected[it.id] && detected[it.id].name === v.name) { delete detected[it.id]; changed++; } }
-          else { detected[it.id] = Object.assign({}, detected[it.id], { url: v.webUrl || "", name: v.name, date: dateFromName(v.name) || (detected[it.id] || {}).date || null }); changed++; }
+          else {
+            const nameDate = dateFromName(v.name);
+            detected[it.id] = Object.assign({}, detected[it.id], { url: v.webUrl || "", name: v.name, date: nameDate || (detected[it.id] || {}).date || null });
+            changed++;
+            // a fresh expiry from the filename → queue an Excel auto-fill (empty cells only)
+            if (nameDate && it.entityKey && it.category) dateUpdates.push({ entityKey: it.entityKey, category: it.category, date: nameDate });
+          }
           continue;
         }
         // No tracked item matched this file — surface it as a supplemental record so the
@@ -303,12 +290,23 @@ module.exports = async (req, res) => {
       const folderPath = docsPathFromUrl(it.folderLink || it.fileLink || ""); if (!folderPath) continue;
       const dates = await ocrDates(token, folderPath, d.name);
       if (dates === null) continue;                   // transient (throttle/error) — retry next run
-      if (dates.length) { d.date = pickExpiry(dates); d.ocr = true; } else { d.ocrTried = true; }
+      if (dates.length) {
+        d.date = pickExpiry(dates); d.ocr = true;
+        if (it.entityKey && it.category) dateUpdates.push({ entityKey: it.entityKey, category: it.category, date: d.date });
+      } else { d.ocrTried = true; }
       ocrChanged = true; ocred = { id, date: d.date || null }; break;   // one per run
     }
     if (ocrChanged) await writeJsonAt(token, DETECTED, detected);
 
-    res.status(200).json({ ok: true, changed, suppChanged, items: Object.keys(detected).length, suppItems: Object.keys(supplemental).length, ocr: ocred, folderErrors });
+    // Auto-fill detected expiry dates into empty cells of the Credentials sheet.
+    let excelFill = null;
+    if (dateUpdates.length) {
+      const xl = require("../lib/excel");
+      try { excelFill = await xl.fillEmptyDates(token, dateUpdates); }
+      catch (e) { excelFill = { error: String(e.message || e).slice(0, 160) }; }
+    }
+
+    res.status(200).json({ ok: true, changed, suppChanged, items: Object.keys(detected).length, suppItems: Object.keys(supplemental).length, ocr: ocred, folderErrors, excelFill });
   } catch (e) {
     res.status(200).json({ ok: false, message: String(e.message || e) });
   }
