@@ -64,10 +64,12 @@ function deriveEntity(folderRel) {
   }
   if (parts[0] === "State Readiness" && parts.length >= 3) {
     const fac = parts[1], sect = parts[2];
-    const idx = STATE_SECTIONS.indexOf(sect);
-    if (idx < 0) return null;
     const entity = fac === "Castle Hills" ? "Castle Hills ER" : (fac === "Frisco" ? "Frisco ER" : null);
     if (!entity) return null;
+    let idx = STATE_SECTIONS.indexOf(sect);
+    // A folder added via the dashboard ("Add folder") won't be one of the standard sections —
+    // surface its files anyway (bucketed under "Other"), don't drop them.
+    if (idx < 0) idx = STATE_SECTIONS.length;
     return { scope: "facility", entity, entityKey: slug(entity), phaseIdx: idx, sectionLabel: sect };
   }
   return null;

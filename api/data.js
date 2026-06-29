@@ -236,6 +236,85 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ---- facility folder ops (admin): create / soft-delete / restore / list folders under a
+  //      facility's State Readiness tree in SharePoint. Soft-delete = rename with a "zz." prefix
+  //      (the scan ignores zz.* folders, and it matches the user's own archive naming), so the
+  //      folder + ALL its files are preserved and fully restorable. ----
+  const facilityAction = url.searchParams.get("facility");
+  if (facilityAction) {
+    if (!s.admin) { res.status(403).json({ error: "admins only" }); return; }
+    try {
+      const { accessToken, docsRoot, encPath, ensureFolderIn, readJsonAt, writeJsonAt, drivePath } = require("../lib/graph");
+      const token = await accessToken();
+      const TRASH = drivePath("_Sentinel/facility_trash.json");
+      const FAC_DIR = { "Castle Hills ER": "Castle Hills", "Frisco ER": "Frisco" };
+      const baseFor = (fac) => "Sama Farooqui/Sentinel/State Readiness/" + FAC_DIR[fac];
+      const cleanName = (n) => String(n || "").replace(/[\/\\:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
+
+      if (facilityAction === "trash") {
+        const t = (await readJsonAt(token, TRASH)) || { entries: [] };
+        res.status(200).json(t); return;
+      }
+
+      let body = ""; await new Promise(r => { req.on("data", c => body += c); req.on("end", r); });
+      let b = {}; try { b = JSON.parse(body || "{}"); } catch (e) {}
+      const fac = String(b.facility || "").trim();
+      if (!FAC_DIR[fac]) { res.status(400).json({ error: "facility must be 'Castle Hills ER' or 'Frisco ER'", got: fac }); return; }
+
+      if (facilityAction === "list") {
+        const r = await fetch(docsRoot() + "/root:/" + encPath(baseFor(fac)) + ":/children?$select=name,folder&$top=400", { headers: { Authorization: "Bearer " + token } });
+        if (!r.ok) { res.status(r.status).json({ error: "list HTTP " + r.status, detail: (await r.text()).slice(0, 160) }); return; }
+        const all = ((await r.json()).value || []).filter(x => x.folder).map(x => x.name);
+        // hide the soft-deleted (zz.*) ones from the live list
+        res.status(200).json({ facility: fac, folders: all.filter(n => !/^zz\./i.test(n)).sort() });
+        return;
+      }
+
+      if (facilityAction === "add") {
+        const name = cleanName(b.name);
+        if (!name) { res.status(400).json({ error: "folder name required" }); return; }
+        if (/^zz\./i.test(name)) { res.status(400).json({ error: "name can't start with 'zz.'" }); return; }
+        await ensureFolderIn(token, docsRoot(), baseFor(fac) + "/" + name);
+        res.status(200).json({ ok: true, action: "created", facility: fac, name }); return;
+      }
+
+      if (facilityAction === "delete") {
+        const name = cleanName(b.name);
+        if (!name) { res.status(400).json({ error: "folder name required" }); return; }
+        const hidden = "zz." + name;
+        const r = await fetch(docsRoot() + "/root:/" + encPath(baseFor(fac) + "/" + name), {
+          method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: hidden })
+        });
+        if (!r.ok) { res.status(r.status === 404 ? 404 : 500).json({ error: "delete (rename) failed " + r.status, detail: (await r.text()).slice(0, 160) }); return; }
+        const t = (await readJsonAt(token, TRASH)) || { entries: [] };
+        const id = "fac_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+        t.entries.unshift({ id, facility: fac, name, hiddenName: hidden, deletedAt: new Date().toISOString(), deletedBy: s.email });
+        if (t.entries.length > 200) t.entries = t.entries.slice(0, 200);
+        await writeJsonAt(token, TRASH, t);
+        res.status(200).json({ ok: true, action: "deleted", facility: fac, name, trashId: id, trashEntries: t.entries.length }); return;
+      }
+
+      if (facilityAction === "restore") {
+        const id = String(b.id || "").trim();
+        const t = (await readJsonAt(token, TRASH)) || { entries: [] };
+        const entry = (t.entries || []).find(e => e.id === id);
+        if (!entry) { res.status(404).json({ error: "trash entry not found" }); return; }
+        const r = await fetch(docsRoot() + "/root:/" + encPath(baseFor(entry.facility) + "/" + entry.hiddenName), {
+          method: "PATCH", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: entry.name })
+        });
+        if (!r.ok) { res.status(500).json({ error: "restore (rename) failed " + r.status, detail: (await r.text()).slice(0, 160) }); return; }
+        t.entries = t.entries.filter(e => e.id !== id);
+        await writeJsonAt(token, TRASH, t);
+        res.status(200).json({ ok: true, action: "restored", facility: entry.facility, name: entry.name }); return;
+      }
+
+      res.status(400).json({ error: "facility action must be add, delete, list, trash, or restore" });
+      return;
+    } catch (e) { res.status(500).json({ error: String(e.message || e) }); return; }
+  }
+
   // ---- server-side OCR (free, OCR.space): read dates off a scanned doc, PDF or image ----
   const ocrUrl = url.searchParams.get("ocr");
   if (ocrUrl) {

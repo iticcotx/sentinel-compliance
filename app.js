@@ -974,6 +974,84 @@
       });
     }).catch(() => toast("Couldn't load recycle bin."));
   }
+  // ---- Facility folder management (admin): add / delete / restore folders in a facility's
+  //      SharePoint State Readiness tree. Mirrors the provider Add + Recycle bin experience. ----
+  var FAC_INPUT = 'width:100%;padding:9px;border-radius:8px;border:1px solid var(--hair);background:var(--surface-solid);color:var(--ink)';
+  function openFacilityFolders(facility) {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    function paint(folders) {
+      var list = folders.length
+        ? folders.map(function (n) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--hair);border-radius:10px;background:var(--surface-solid)">' +
+              '<div style="flex:1;font-weight:600">📁 ' + esc(n) + '</div>' +
+              '<button class="icon-btn danger" data-del="' + esc(n) + '">🗑 Delete</button></div>';
+          }).join("")
+        : '<div class="item-sub">No folders here yet.</div>';
+      openModal("Add / manage folders — " + esc(facility),
+        '<div class="item-sub" style="margin-bottom:10px">Folders live in SharePoint under <b>State Readiness › ' + esc(facility) + '</b>. A new folder shows on the dashboard within ~45s. Deleting moves it to the Recycle bin (its files are kept and it can be restored).</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:14px"><input id="facNew" placeholder="New folder name" style="' + FAC_INPUT + ';flex:1"><button class="save" id="facAdd" style="white-space:nowrap">＋ Add folder</button></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' + list + '</div>');
+      $("#facAdd").onclick = function () {
+        var name = ($("#facNew").value || "").trim();
+        if (!name) { toast("Enter a folder name."); return; }
+        $("#facAdd").disabled = true;
+        fetch("/api/data?facility=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facility: facility, name: name }) })
+          .then(function (r) { return r.json(); }).then(function (d) {
+            if (!d.ok) { toast("Add failed: " + (d.error || "unknown")); $("#facAdd").disabled = false; return; }
+            toast("✓ Folder created — showing on the dashboard within ~45s."); fetch("/api/scan").catch(function () {}); load();
+          }).catch(function (e) { toast("Add failed: " + (e.message || e)); $("#facAdd").disabled = false; });
+      };
+      [].forEach.call($("#modalInner").querySelectorAll("[data-del]"), function (btn) {
+        btn.onclick = function () {
+          var name = btn.dataset.del;
+          if (!confirm('Delete folder "' + name + '"?\n\nIt moves to the Recycle bin and can be restored. Its files are kept.')) return;
+          btn.disabled = true; btn.textContent = "Deleting…";
+          fetch("/api/data?facility=delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facility: facility, name: name }) })
+            .then(function (r) { return r.json(); }).then(function (d) {
+              if (!d.ok) { toast("Delete failed: " + (d.error || "unknown")); btn.disabled = false; btn.textContent = "🗑 Delete"; return; }
+              toast("✓ Deleted (recoverable from Recycle bin)."); fetch("/api/scan").catch(function () {}); load();
+            }).catch(function (e) { toast("Delete failed: " + (e.message || e)); btn.disabled = false; btn.textContent = "🗑 Delete"; });
+        };
+      });
+    }
+    function load() {
+      toast("Loading folders…");
+      fetch("/api/data?facility=list&_t=" + Date.now(), { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facility: facility }) })
+        .then(function (r) { return r.json(); }).then(function (d) { if (d.folders) paint(d.folders); else { toast("Couldn't load: " + (d.error || "")); paint([]); } })
+        .catch(function () { toast("Couldn't load folders."); });
+    }
+    load();
+  }
+  function openFacilityRecycleBin(facility) {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    toast("Loading recycle bin…");
+    fetch("/api/data?facility=trash&_t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (t) {
+      var entries = ((t && t.entries) || []).filter(function (e) { return !facility || e.facility === facility; });
+      var body = entries.length
+        ? '<div class="item-sub" style="margin-bottom:12px">Deleted folders for <b>' + esc(facility) + '</b>. Restore puts a folder (and its files) back.</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px">' +
+          entries.map(function (e) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);border-radius:10px;background:var(--surface-solid)">' +
+              '<div style="flex:1"><div style="font-weight:700">📁 ' + esc(e.name) + '</div>' +
+              '<div class="item-sub" style="font-size:12px">deleted ' + esc(new Date(e.deletedAt).toLocaleString()) + ' by ' + esc(e.deletedBy || "—") + '</div></div>' +
+              '<button class="icon-btn" data-rid="' + esc(e.id) + '">↺ Restore</button></div>';
+          }).join("") + '</div>'
+        : '<div class="empty" style="padding:30px"><h3>Recycle bin is empty</h3><p>No deleted folders for ' + esc(facility) + '.</p></div>';
+      openModal("Recycle bin — " + esc(facility), body);
+      [].forEach.call($("#modalInner").querySelectorAll("[data-rid]"), function (b) {
+        b.onclick = function () {
+          var id = b.dataset.rid;
+          if (!confirm("Restore this folder?")) return;
+          b.disabled = true; b.textContent = "Restoring…";
+          fetch("/api/data?facility=restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id, facility: facility }) })
+            .then(function (r) { return r.json(); }).then(function (d) {
+              if (!d.ok) { toast("Restore failed: " + (d.error || "unknown")); b.disabled = false; b.textContent = "↺ Restore"; return; }
+              closeModal(); toast("✓ Restored " + d.name + " — showing within ~45s."); fetch("/api/scan").catch(function () {});
+            }).catch(function (e) { toast("Restore failed: " + (e.message || e)); b.disabled = false; b.textContent = "↺ Restore"; });
+        };
+      });
+    }).catch(function () { toast("Couldn't load recycle bin."); });
+  }
   function removeProviderFromRoster(name, entityKey) {
     if (!isAdmin()) { toast("Admins only."); return; }
     const { first, last } = splitName(name);
@@ -1075,6 +1153,19 @@
         sortDocs(docs).forEach(it => grid.appendChild(docTile(it)));
         if (!docs.length) grid.innerHTML = '<div class="hempty">No documents here yet.</div>';
       }
+    }
+    // Facility/Other drill: admin tiles to add folders + recycle bin (OneDrive-synced), scoped
+    // to the drilled-in facility. Prepended so they lead the grid.
+    if (isAdmin() && state.drill.length === 1 && (tab === "facility" || tab === "other") && !(state.search || "").trim()) {
+      const fent = state.drill[0];
+      const fbin = el("div", "tile tile-add tile-bin");
+      fbin.innerHTML = '<div class="add-plus">🗑</div><div class="tile-nm">Recycle bin</div><div class="tile-meta">Restore deleted folders</div>';
+      fbin.onclick = () => openFacilityRecycleBin(fent);
+      grid.insertBefore(fbin, grid.firstChild);
+      const fmf = el("div", "tile tile-add");
+      fmf.innerHTML = '<div class="add-plus">📁</div><div class="tile-nm">Add / manage folders</div><div class="tile-meta">Create or delete folders in OneDrive</div>';
+      fmf.onclick = () => openFacilityFolders(fent);
+      grid.insertBefore(fmf, grid.firstChild);
     }
     c.appendChild(grid);
 
