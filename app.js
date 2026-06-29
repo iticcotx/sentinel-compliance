@@ -506,8 +506,7 @@
       '<div class="spacer" style="flex:1"></div>' +
       '<div class="seg" id="viewSeg">' +
         ['list', 'timeline', 'calendar'].map(v => '<button data-v="' + v + '" class="' + (state.view === v ? "on" : "") + '">' + v.charAt(0).toUpperCase() + v.slice(1) + '</button>').join("") +
-      '</div>' +
-      '<button class="icon-btn" id="addBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add item</button>';
+      '</div>';
     $("#q").addEventListener("focus", function () { this.removeAttribute("readonly"); }, { once: true });
     $("#q").oninput = e => { state.search = e.target.value; $("#qClear").style.display = e.target.value ? "" : "none"; renderContent(); };
     $("#qClear").onclick = () => { state.search = ""; $("#q").value = ""; $("#qClear").style.display = "none"; renderContent(); $("#q").focus(); };
@@ -520,7 +519,6 @@
       if (state.view === "calendar") { state.selectMode = false; state.selection.clear(); }
       render();
     });
-    $("#addBtn").onclick = () => openDrawer(null, true);
   }
 
   function renderQuickViews() {
