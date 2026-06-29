@@ -179,6 +179,9 @@ module.exports = async (req, res) => {
         out.driveRoot = await list("");
         out.physiciansFolder = await list("WCGTX Phyicians_04.08.2020");
         out.complianceFolder = await list("WCGTX Phyicians_04.08.2020/Compliance");
+        // search the whole drive for the roster wherever it moved to
+        const sr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root/search(q='Physician Roster')?$select=name,webUrl,parentReference,lastModifiedDateTime", { headers: { Authorization: "Bearer " + token } });
+        out.search = sr.ok ? (await sr.json()).value.filter(x => /\.xlsx?$/i.test(x.name)).map(x => ({ name: x.name, path: x.parentReference && x.parentReference.path, mod: x.lastModifiedDateTime })) : ("search HTTP " + sr.status);
       }
       res.status(200).json(out);
     } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
