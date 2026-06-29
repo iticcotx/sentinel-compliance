@@ -3,7 +3,7 @@
 // matches them to items. For matched files with no date in the filename, it then reads the
 // expiry by OCR (OCR.space, free) SERVER-SIDE — so dates fill in automatically, no opening.
 // Results -> _Sentinel/auto_detected.json, which /api/uploads-map merges into the dashboard.
-const { accessToken, docsRoot, docsPathFromUrl, encPath, drivePath, readJsonAt, writeJsonAt, dateFromName, GRAPH, DRIVE_ID } = require("../lib/graph");
+const { accessToken, docsRoot, docsPathFromUrl, encPath, drivePath, readJsonAt, writeJsonAt, dateFromName } = require("../lib/graph");
 // Re-read data.json fresh on each invocation (don't cache via require — warm lambdas would
 // keep a stale index, missing newly added providers/items).
 const fs = require("fs");
@@ -156,33 +156,6 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
-  // TEMP diagnostic (cloud78): public read of live app-state so the trash bug can be inspected
-  // without an admin session. FAKE data only. Remove once the recycle-bin bug is closed.
-  const peek = new URL(req.url, "http://localhost").searchParams.get("peek");
-  if (peek) {
-    try {
-      const token = await accessToken();
-      const out = { ok: true, peek, trashPath: drivePath("_Sentinel/trash.json") };
-      if (peek === "trash" || peek === "all") out.trash = await readJsonAt(token, drivePath("_Sentinel/trash.json"));
-      if (peek === "delta" || peek === "all") out.delta = await readJsonAt(token, drivePath("_Sentinel/roster_delta.json"));
-      const lr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(drivePath("_Sentinel")) + ":/children?$select=name,size,lastModifiedDateTime", { headers: { Authorization: "Bearer " + token } });
-      out.sentinelFolder = lr.ok ? (await lr.json()).value.map(x => ({ name: x.name, size: x.size, mod: x.lastModifiedDateTime })) : ("list HTTP " + lr.status + " " + (await lr.text()).slice(0, 120));
-      if (peek === "roster" || peek === "all") {
-        // Verify the CONFIGURED roster path (lib/excel ROSTER_PATH) resolves + loads.
-        const xl = require("../lib/excel");
-        out.rosterPathConfigured = xl.ROSTER_PATH;
-        const rr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(xl.ROSTER_PATH), { headers: { Authorization: "Bearer " + token } });
-        out.rosterProbe = rr.status;
-        try {
-          const sh = await xl.readSheet(token, xl.SHEET_ACTIVE);
-          out.credentialsRows = (sh.values || []).length;
-          out.firstNames = (sh.values || []).slice(1, 6).map(r => [r[0], r[1]]);
-        } catch (e) { out.readError = String(e.message || e).slice(0, 160); }
-      }
-      res.status(200).json(out);
-    } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
-    return;
-  }
   try {
     const token = await accessToken();
     const state = (await readJsonAt(token, STATE)) || {};
