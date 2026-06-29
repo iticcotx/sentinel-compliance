@@ -167,6 +167,19 @@ module.exports = async (req, res) => {
       if (peek === "delta" || peek === "all") out.delta = await readJsonAt(token, drivePath("_Sentinel/roster_delta.json"));
       const lr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(drivePath("_Sentinel")) + ":/children?$select=name,size,lastModifiedDateTime", { headers: { Authorization: "Bearer " + token } });
       out.sentinelFolder = lr.ok ? (await lr.json()).value.map(x => ({ name: x.name, size: x.size, mod: x.lastModifiedDateTime })) : ("list HTTP " + lr.status + " " + (await lr.text()).slice(0, 120));
+      if (peek === "roster" || peek === "all") {
+        const list = async (p) => {
+          const u = GRAPH + "/drives/" + DRIVE_ID + (p ? "/root:/" + encPath(p) + ":/children" : "/root/children") + "?$select=name,folder,file,lastModifiedDateTime";
+          const r = await fetch(u, { headers: { Authorization: "Bearer " + token } });
+          return r.ok ? (await r.json()).value.map(x => (x.folder ? "[DIR] " : "      ") + x.name) : ("HTTP " + r.status);
+        };
+        out.rosterPathExpected = "WCGTX Phyicians_04.08.2020/Compliance/WCGTX Physician Roster.xlsx";
+        const rr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath("WCGTX Phyicians_04.08.2020/Compliance/WCGTX Physician Roster.xlsx"), { headers: { Authorization: "Bearer " + token } });
+        out.rosterProbe = rr.status;
+        out.driveRoot = await list("");
+        out.physiciansFolder = await list("WCGTX Phyicians_04.08.2020");
+        out.complianceFolder = await list("WCGTX Phyicians_04.08.2020/Compliance");
+      }
       res.status(200).json(out);
     } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
     return;
