@@ -1996,25 +1996,29 @@
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="flex:1">' + esc(u.email) + '</b>' +
           (u.admin ? '<span class="ac renew">admin</span>' : '') + (isMe ? '<span class="item-sub">(you)</span>' : '') +
           (u.admin ? '' : '<button class="icon-btn arem" data-e="' + esc(u.email) + '">Remove</button>') + '</div>' +
-          '<div>' + tabBoxes(i, u.tabs) + '<button class="icon-btn asave" data-e="' + esc(u.email) + '" data-i="' + i + '" style="margin-left:6px">Save tabs</button></div></div>';
+          '<div>' + tabBoxes(i, u.tabs) +
+          '<label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;margin-right:8px;border-left:1px solid var(--hair);padding-left:8px" title="Admins can add, edit and delete. Unchecked = view only."><input type="checkbox" class="adm-' + i + '"' + (u.admin ? " checked" : "") + (isMe ? " disabled" : "") + '> Admin (can edit)</label>' +
+          '<button class="icon-btn asave" data-e="' + esc(u.email) + '" data-i="' + i + '" style="margin-left:6px">Save</button></div></div>';
       }).join("");
       openModal("Manage access — accounts &amp; tabs",
         '<div class="item-sub" style="margin-bottom:10px">Each Microsoft account below can sign in and see <b>only the ticked tabs</b>. Add a coworker’s <b>@wcgtx.com</b> email and choose their tabs.</div>' +
         rows +
         '<div style="border-top:1px solid var(--hair);margin-top:10px;padding-top:10px"><div class="dl">Add someone</div>' +
         '<div style="display:flex;gap:6px;margin:6px 0"><input id="aEmail" type="email" placeholder="name@wcgtx.com" style="flex:1;' + ip + '"></div>' +
-        '<div id="newTabs">' + TAB_DEFS.map(([k, lab]) => '<label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;margin-right:8px"><input type="checkbox" class="tb-new" data-t="' + k + '" checked>' + lab + '</label>').join("") + '</div>' +
+        '<div id="newTabs">' + TAB_DEFS.map(([k, lab]) => '<label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;margin-right:8px"><input type="checkbox" class="tb-new" data-t="' + k + '" checked>' + lab + '</label>').join("") +
+        '<label style="font-size:12px;display:inline-flex;align-items:center;gap:4px;margin-right:8px;border-left:1px solid var(--hair);padding-left:8px" title="Admins can add, edit and delete. Leave unchecked for view-only access."><input type="checkbox" id="aAdmin"> Admin (can edit)</label></div>' +
         '<button class="btn-primary" id="aAdd" style="max-width:160px;margin-top:8px">Add account</button></div>' +
         '<div class="auth-msg" id="aMsg" style="min-height:16px;margin-top:6px"></div>');
       [...$("#modalInner").querySelectorAll(".arem")].forEach(b => b.onclick = () => post({ action: "remove", email: b.dataset.e }));
       [...$("#modalInner").querySelectorAll(".asave")].forEach(b => b.onclick = () => {
         const tabs = [...$("#modalInner").querySelectorAll(".tb-" + b.dataset.i + ":checked")].map(c => c.dataset.t);
-        post({ action: "save", email: b.dataset.e, tabs: tabs });
+        const admBox = $("#modalInner").querySelector(".adm-" + b.dataset.i);
+        post({ action: "save", email: b.dataset.e, tabs: tabs, admin: admBox ? admBox.checked : false });
       });
       $("#aAdd").onclick = () => {
         const v = $("#aEmail").value.trim(); if (!v) { $("#aMsg").textContent = "Enter an email."; return; }
         const tabs = [...$("#modalInner").querySelectorAll(".tb-new:checked")].map(c => c.dataset.t);
-        post({ action: "save", email: v, tabs: tabs });
+        post({ action: "save", email: v, tabs: tabs, admin: $("#aAdmin") ? $("#aAdmin").checked : false });
       };
     };
     const post = (body) => {
