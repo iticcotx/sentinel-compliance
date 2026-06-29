@@ -156,6 +156,26 @@ module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
+  // TEMP diagnostic: dump roster sheet column headers + sample rows. Remove after.
+  const peek = new URL(req.url, "http://localhost").searchParams.get("peek");
+  if (peek === "cols") {
+    try {
+      const token = await accessToken();
+      const xl = require("../lib/excel");
+      const out = {};
+      for (const sheet of [xl.SHEET_ACTIVE, "WCGTX COI Roster", xl.SHEET_INACTIVE]) {
+        try {
+          const sh = await xl.readSheet(token, sheet);
+          const header = (sh.values || [])[0] || [];
+          // find a data row that actually has some values past the name columns
+          const sample = (sh.values || []).slice(1).find(r => r.slice(2).some(c => c != null && String(c).trim())) || (sh.values || [])[1] || [];
+          out[sheet] = { columns: header.map((h, i) => i + ":" + (h == null ? "" : String(h).slice(0, 40))), sampleRow: sample.map(c => c == null ? "" : String(c).slice(0, 30)) };
+        } catch (e) { out[sheet] = "err " + String(e.message || e).slice(0, 80); }
+      }
+      res.status(200).json(out);
+    } catch (e) { res.status(200).json({ ok: false, error: String(e.message || e) }); }
+    return;
+  }
   try {
     const token = await accessToken();
     const state = (await readJsonAt(token, STATE)) || {};
