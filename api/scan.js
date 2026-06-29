@@ -189,6 +189,18 @@ module.exports = async (req, res) => {
         const B = "WCGTX Phyicians_04.08.2020/";
         out["copyA ..WCGTX Master Rosters"] = await meta(B + "..WCGTX Master Rosters/WCGTX Physician Roster.xlsx");
         out["copyB ..ZCompliance"] = await meta(B + "..ZCompliance/WCGTX Physician Roster.xlsx");
+        // load each workbook and report sheet names + Credentials row count, to confirm compatibility
+        const ExcelJS = require("exceljs");
+        const sheets = async (p) => {
+          try {
+            const r = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(p) + ":/content", { headers: { Authorization: "Bearer " + token } });
+            if (!r.ok) return "HTTP " + r.status;
+            const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.from(await r.arrayBuffer()));
+            return wb.worksheets.map(ws => ws.name + " (" + ws.rowCount + " rows)");
+          } catch (e) { return "err " + String(e.message || e).slice(0, 80); }
+        };
+        out["sheetsA"] = await sheets(B + "..WCGTX Master Rosters/WCGTX Physician Roster.xlsx");
+        out["sheetsB"] = await sheets(B + "..ZCompliance/WCGTX Physician Roster.xlsx");
       }
       res.status(200).json(out);
     } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
