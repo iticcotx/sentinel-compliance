@@ -92,7 +92,10 @@ module.exports = async (req, res) => {
       let b = {}; try { b = JSON.parse(body || "{}"); } catch (e) {}
       const last = String(b.last || "").trim();
       const first = String(b.first || "").trim();
-      if (!last) { res.status(400).json({ error: "last name required" }); return; }
+      // 'trash' is a read (no body) and 'restore' is keyed by {id} — neither needs a last name.
+      // This guard was bouncing the Recycle bin read with "last name required" before it ever
+      // reached the trash branch, which is why the bin always looked empty.
+      if (!last && rosterAction !== "trash" && rosterAction !== "restore") { res.status(400).json({ error: "last name required" }); return; }
       if (rosterAction === "add") {
         // Only block dups in the ACTIVE sheet — if the same name exists in Inactive Providers,
         // they were deactivated and the user can legitimately re-add. Force=true bypasses
