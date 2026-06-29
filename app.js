@@ -896,11 +896,13 @@
       addProviderRequest(f, l, em, false);
     };
   }
+  function isLockError(err) { return /ROSTER_LOCKED|resourceLocked|is locked|\b423\b/i.test(String(err || "")); }
   function addProviderRequest(f, l, em, force) {
     fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined, force: !!force }) })
         .then(r => r.json())
         .then(d => {
           if (!d.ok) {
+            if (isLockError(d.error)) { toast("⚠ The master Excel is open right now — close WCGTX Physician Roster.xlsx in Excel (desktop + any browser tab), wait a few seconds, then try again."); return; }
             // 409: name already present in the active sheet. Offer to add anyway (true duplicate name).
             if (/already present/i.test(d.error || "")) {
               if (confirm('"' + f + " " + l + '" is already in the active roster.\n\nAdd a second row with the same name anyway? (Use this only for true duplicate-named providers — the dashboard will treat them as one entity.)')) {
@@ -929,7 +931,10 @@
     fetch("/api/data?roster=delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first, last, entityKey: entityKey || "" }) })
       .then(r => r.json())
       .then(d => {
-        if (!d.ok) { let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return; }
+        if (!d.ok) {
+          if (isLockError(d.error)) { toast("⚠ The master Excel is open right now — close WCGTX Physician Roster.xlsx in Excel (desktop + any browser tab), wait a few seconds, then try again."); return; }
+          let msg = "Delete failed: " + (d.error || "unknown"); if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '", entityKey="' + d.tried.entityKey + '"'; toast(msg); return;
+        }
         console.log("[delete provider]", d);
         const snapMsg = d.snapshot && d.snapshot.ok ? (" backup ✓") : (d.snapshot ? (" backup ✗ " + (d.snapshot.error || "")) : "");
         const folderMsg = d.folder && d.folder.ok ? (d.folder.note ? "" : " folder ✓") : (d.folder ? (" folder ✗ " + (d.folder.status || "") + " " + (d.folder.error || "")) : "");
@@ -1062,6 +1067,7 @@
       .then(r => r.json())
       .then(d => {
         if (!d.ok) {
+          if (isLockError(d.error)) { toast("⚠ The master Excel is open right now — close WCGTX Physician Roster.xlsx in Excel (desktop + any browser tab), wait a few seconds, then try again."); return; }
           let msg = "Remove failed: " + (d.error || "unknown");
           if (d.tried) msg += '\nLooked up: last="' + d.tried.last + '", first="' + d.tried.first + '"';
           if (d.sample && d.sample.length) msg += "\nSample rows from sheet: " + d.sample.slice(0, 3).map(r => r.last + ", " + r.first).join(" | ");
