@@ -168,39 +168,16 @@ module.exports = async (req, res) => {
       const lr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(drivePath("_Sentinel")) + ":/children?$select=name,size,lastModifiedDateTime", { headers: { Authorization: "Bearer " + token } });
       out.sentinelFolder = lr.ok ? (await lr.json()).value.map(x => ({ name: x.name, size: x.size, mod: x.lastModifiedDateTime })) : ("list HTTP " + lr.status + " " + (await lr.text()).slice(0, 120));
       if (peek === "roster" || peek === "all") {
-        const list = async (p) => {
-          const u = GRAPH + "/drives/" + DRIVE_ID + (p ? "/root:/" + encPath(p) + ":/children" : "/root/children") + "?$select=name,folder,file,lastModifiedDateTime";
-          const r = await fetch(u, { headers: { Authorization: "Bearer " + token } });
-          return r.ok ? (await r.json()).value.map(x => (x.folder ? "[DIR] " : "      ") + x.name) : ("HTTP " + r.status);
-        };
-        out.rosterPathExpected = "WCGTX Phyicians_04.08.2020/Compliance/WCGTX Physician Roster.xlsx";
-        const rr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath("WCGTX Phyicians_04.08.2020/Compliance/WCGTX Physician Roster.xlsx"), { headers: { Authorization: "Bearer " + token } });
+        // Verify the CONFIGURED roster path (lib/excel ROSTER_PATH) resolves + loads.
+        const xl = require("../lib/excel");
+        out.rosterPathConfigured = xl.ROSTER_PATH;
+        const rr = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(xl.ROSTER_PATH), { headers: { Authorization: "Bearer " + token } });
         out.rosterProbe = rr.status;
-        out.driveRoot = await list("");
-        out.physiciansFolder = await list("WCGTX Phyicians_04.08.2020");
-        out.complianceFolder = await list("WCGTX Phyicians_04.08.2020/Compliance");
-        // compare the two roster copies found during the reorg — which is live?
-        const meta = async (p) => {
-          const r = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(p) + "?$select=name,size,lastModifiedDateTime,createdDateTime", { headers: { Authorization: "Bearer " + token } });
-          if (!r.ok) return "HTTP " + r.status;
-          const j = await r.json();
-          return { size: j.size, modified: j.lastModifiedDateTime, created: j.createdDateTime };
-        };
-        const B = "WCGTX Phyicians_04.08.2020/";
-        out["copyA ..WCGTX Master Rosters"] = await meta(B + "..WCGTX Master Rosters/WCGTX Physician Roster.xlsx");
-        out["copyB ..ZCompliance"] = await meta(B + "..ZCompliance/WCGTX Physician Roster.xlsx");
-        // load each workbook and report sheet names + Credentials row count, to confirm compatibility
-        const ExcelJS = require("exceljs");
-        const sheets = async (p) => {
-          try {
-            const r = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(p) + ":/content", { headers: { Authorization: "Bearer " + token } });
-            if (!r.ok) return "HTTP " + r.status;
-            const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.from(await r.arrayBuffer()));
-            return wb.worksheets.map(ws => ws.name + " (" + ws.rowCount + " rows)");
-          } catch (e) { return "err " + String(e.message || e).slice(0, 80); }
-        };
-        out["sheetsA"] = await sheets(B + "..WCGTX Master Rosters/WCGTX Physician Roster.xlsx");
-        out["sheetsB"] = await sheets(B + "..ZCompliance/WCGTX Physician Roster.xlsx");
+        try {
+          const sh = await xl.readSheet(token, xl.SHEET_ACTIVE);
+          out.credentialsRows = (sh.values || []).length;
+          out.firstNames = (sh.values || []).slice(1, 6).map(r => [r[0], r[1]]);
+        } catch (e) { out.readError = String(e.message || e).slice(0, 160); }
       }
       res.status(200).json(out);
     } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
