@@ -179,11 +179,16 @@ module.exports = async (req, res) => {
         out.driveRoot = await list("");
         out.physiciansFolder = await list("WCGTX Phyicians_04.08.2020");
         out.complianceFolder = await list("WCGTX Phyicians_04.08.2020/Compliance");
-        // list the candidate folders the roster may have been moved into during the reorg
-        const base = "WCGTX Phyicians_04.08.2020/";
-        for (const cand of ["..WCGTX Master Rosters", "..ZCompliance", "..ZCredentialing & Compliance", "..WCGTX Master Physician File"]) {
-          out["ls: " + cand] = await list(base + cand);
-        }
+        // compare the two roster copies found during the reorg — which is live?
+        const meta = async (p) => {
+          const r = await fetch(GRAPH + "/drives/" + DRIVE_ID + "/root:/" + encPath(p) + "?$select=name,size,lastModifiedDateTime,createdDateTime", { headers: { Authorization: "Bearer " + token } });
+          if (!r.ok) return "HTTP " + r.status;
+          const j = await r.json();
+          return { size: j.size, modified: j.lastModifiedDateTime, created: j.createdDateTime };
+        };
+        const B = "WCGTX Phyicians_04.08.2020/";
+        out["copyA ..WCGTX Master Rosters"] = await meta(B + "..WCGTX Master Rosters/WCGTX Physician Roster.xlsx");
+        out["copyB ..ZCompliance"] = await meta(B + "..ZCompliance/WCGTX Physician Roster.xlsx");
       }
       res.status(200).json(out);
     } catch (e) { res.status(200).json({ ok: false, peek, error: String(e.message || e) }); }
