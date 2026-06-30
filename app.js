@@ -390,6 +390,7 @@
       { label: "Save to Excel", fn: exportXlsx, edit: true, localOnly: true },
       { label: "Change log", fn: openAudit },
       { label: "Document gaps", fn: openGapReport },
+      { label: "Sync from Excel", fn: syncFromExcel, cloudOnly: true, admin: true },
       { label: "Backup", fn: backup, admin: true },
       { label: "Restore", fn: restore, edit: true, admin: true },
       { label: "Manage access", fn: openAccessPanel, cloudOnly: true, admin: true },
@@ -897,6 +898,21 @@
     };
   }
   function isLockError(err) { return /ROSTER_LOCKED|resourceLocked|is locked|\b423\b/i.test(String(err || "")); }
+  // Pull the latest roster + expiry dates straight from the master Excel on demand.
+  function syncFromExcel() {
+    if (!isAdmin()) { toast("Admins only."); return; }
+    toast("Syncing from the master Excel…");
+    fetch("/api/data?regen=1", { method: "POST" }).then(r => r.json()).then(d => {
+      if (d.error) { toast(isLockError(d.error) ? "⚠ The master Excel is open right now — close it and try again." : ("Sync failed: " + d.error)); return; }
+      return fetch("/api/data").then(r => r.json()).then(j => {
+        if (j && j.items) {
+          window.SENTINEL_SEED = j; buildData(); render();
+          var dd = d.delta || {};
+          toast("✓ Synced from Excel — " + (dd.newProviders || 0) + " new provider(s), " + (dd.dates || 0) + " dates read.");
+        }
+      });
+    }).catch(e => toast("Sync failed: " + (e.message || e)));
+  }
   function addProviderRequest(f, l, em, force) {
     fetch("/api/data?roster=add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ first: f, last: l, email: em || undefined, force: !!force }) })
         .then(r => r.json())

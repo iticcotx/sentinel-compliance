@@ -63,9 +63,10 @@ module.exports = async (req, res) => {
       const newProviders = liveActive.filter(p => !seedKeys.has(slug(p.last, p.first)));
       const inactivated = (data.items || []).filter(i => i.scope === "provider" && i.active && liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
       const removed = (data.items || []).filter(i => i.scope === "provider" && i.active && !liveActiveKeys.has(i.entityKey) && !liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
-      const delta = { generatedAt: new Date().toISOString(), newProviders, inactivated: [...new Set(inactivated)], removed: [...new Set(removed)] };
+      const dates = xl.expiryDatesFromValues(act.values);
+      const delta = { generatedAt: new Date().toISOString(), newProviders, inactivated: [...new Set(inactivated)], removed: [...new Set(removed)], dates };
       await writeJsonAt(token, drivePath("_Sentinel/roster_delta.json"), delta);
-      res.status(200).json({ ok: true, delta: { newProviders: newProviders.length, inactivated: delta.inactivated.length, removed: delta.removed.length } });
+      res.status(200).json({ ok: true, delta: { newProviders: newProviders.length, inactivated: delta.inactivated.length, removed: delta.removed.length, dates: dates.length } });
     } catch (e) { res.status(500).json({ error: String(e.message || e) }); }
     return;
   }

@@ -79,9 +79,10 @@ module.exports = async (req, res) => {
       const newProviders = liveActive.filter(p => !seedKeys.has(slug(p.last, p.first)));
       const inactivated = (data.items || []).filter(i => i.scope === "provider" && i.active && liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
       const removed = (data.items || []).filter(i => i.scope === "provider" && i.active && !liveActiveKeys.has(i.entityKey) && !liveInactiveKeys.has(i.entityKey)).map(i => i.entityKey);
-      const delta = { generatedAt: new Date().toISOString(), newProviders, inactivated: [...new Set(inactivated)], removed: [...new Set(removed)] };
+      const dates = xl.expiryDatesFromValues(act.values);
+      const delta = { generatedAt: new Date().toISOString(), newProviders, inactivated: [...new Set(inactivated)], removed: [...new Set(removed)], dates };
       await writeJsonAt(tok, drivePath("_Sentinel/roster_delta.json"), delta);
-      regenInfo = { newProviders: newProviders.length, inactivated: delta.inactivated.length, removed: delta.removed.length };
+      regenInfo = { newProviders: newProviders.length, inactivated: delta.inactivated.length, removed: delta.removed.length, dates: dates.length };
     } catch (e) { regenInfo = { error: String(e.message || e).slice(0, 200) }; }
     const users = await getUsers();
     for (const u of users) { try { await send(u.email, (u.tabs && u.tabs.length) ? u.tabs : ["provider", "facility", "other"]); } catch (e) {} }
