@@ -809,7 +809,7 @@
   }
   function openFile(it) { const u = fileViewerUrl(it); if (u) window.open(u, "_blank", "noopener"); else openDrawer(it, false); }
 
-  function entityTile(name, items, tab) {
+  function entityTile(name, items, tab, serial) {
     const gs = statsFor(items);
     const isPeople = tab === "provider" || tab === "staff";
     const total = items.length;
@@ -825,7 +825,7 @@
     const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="badge b-ready" style="margin-left:6px">TEST</span>' : "";
     const t = el("div", "tile tile-entity");
     t.innerHTML =
-      '<div class="c-top">' + icon + '<span class="badge ' + badge[1] + '">' + badge[0] + '</span></div>' +
+      '<div class="c-top">' + icon + (serial ? '<span class="c-sn">#' + serial + '</span>' : '') + '<span class="badge ' + badge[1] + '">' + badge[0] + '</span></div>' +
       '<div class="c-name">' + esc(name) + test + '</div>' +
       '<div class="prow"><div class="prow-h"><span>Documents on file</span><b>' + docsPct + '%</b></div><div class="bar"><i class="' + barc(docsPct) + '" style="width:' + docsPct + '%"></i></div></div>' +
       '<div class="prow"><div class="prow-h"><span>Currently valid</span><b>' + validPct + '%</b></div><div class="bar"><i class="' + barc(validPct) + '" style="width:' + validPct + '%"></i></div></div>' +
@@ -1164,7 +1164,7 @@
         bin.onclick = openRecycleBin;
         grid.appendChild(bin);
       }
-      sortedEntityNames(groups).forEach(name => grid.appendChild(entityTile(name, groups[name], tab)));
+      sortedEntityNames(groups).forEach((name, i) => grid.appendChild(entityTile(name, groups[name], tab, i + 1)));
       if (!grid.children.length) grid.innerHTML = '<div class="hempty">No matching items.</div>';
     } else {
       const entity = state.drill[0];

@@ -111,7 +111,7 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .side-foot { margin-top:auto; font-size:11.5px; line-height:1.9; padding:10px 8px 0; border-top:1px solid var(--hair); }
 .side-foot a { display:block; color:var(--ink-2); cursor:pointer; text-decoration:none; }
 .side-foot a:hover { color:var(--accent); }
-.mainpane { flex:1; min-width:0; max-width:1320px; margin:0 auto; padding:20px clamp(14px,3vw,30px) 60px; width:100%; }
+.mainpane { flex:1; min-width:0; padding:20px clamp(16px,2.4vw,34px) 60px; width:100%; }
 /* filter chips (facility) */
 .chips { display:flex; gap:8px; flex-wrap:wrap; }
 .chip { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--hair); background:var(--surface-solid); color:var(--ink-2); font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:999px; transition:.14s; }
@@ -126,11 +126,12 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .tile.tile-entity { aspect-ratio:auto; min-height:240px; display:flex; flex-direction:column; padding:20px; border-radius:14px;
   border:1px solid var(--hair); box-shadow:0 1px 2px rgba(20,20,50,.04); }
 .tile.tile-entity:hover { box-shadow:0 8px 24px rgba(20,20,50,.09); transform:translateY(-2px); border-color:var(--hair); }
-.tile-entity .c-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+.tile-entity .c-top { display:flex; align-items:center; justify-content:flex-start; gap:9px; margin-bottom:14px; }
+.tile-entity .c-sn { font-size:12px; font-weight:800; color:var(--ink-3); font-variant-numeric:tabular-nums; }
 .tile-entity .c-ic { width:34px; height:34px; border-radius:9px; background:var(--teal-50); color:var(--accent);
   display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; }
 .tile-entity .c-ic svg { width:18px; height:18px; }
-.tile-entity .badge { font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; white-space:nowrap; }
+.tile-entity .badge { margin-left:auto; font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; white-space:nowrap; }
 .tile-entity .badge.b-prog { background:#eef2f8; color:#5b6b86; }
 .tile-entity .badge.b-ready { background:var(--st-good-bg); color:var(--st-good); }
 .tile-entity .badge.b-act { background:var(--st-expired-bg); color:var(--st-expired); }
