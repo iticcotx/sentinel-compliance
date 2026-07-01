@@ -3,9 +3,9 @@
    Light theme by default · dark toggle · glassmorphism · WCAG-AA contrast
    ========================================================================== */
 :root {
-  /* Brand */
-  --teal-900:#134e4a; --teal-700:#0f766e; --teal-600:#0d9488; --teal-500:#14b8a6;
-  --teal-300:#5eead4; --teal-50:#f0fdfa;
+  /* Brand — indigo/violet (SaaS) */
+  --teal-900:#312e81; --teal-700:#4338ca; --teal-600:#4f46e5; --teal-500:#6366f1;
+  --teal-300:#a5b4fc; --teal-50:#eef2ff;
   --amber-600:#d97706; --amber-500:#f59e0b; --amber-200:#fde68a;
 
   /* Status (readable on white) */
@@ -32,7 +32,7 @@
   --surface:rgba(20,30,40,0.66); --surface-solid:#111a22;
   --card-bd:rgba(255,255,255,0.07); --hair:#1e2b36;
   --ink:#e9eef3; --ink-2:#a4b3c0; --ink-3:#64758a;
-  --accent:var(--teal-500); --accent-ink:#04201d;
+  --accent:var(--teal-500); --accent-ink:#ffffff;
   --shadow:0 8px 30px rgba(0,0,0,0.4); --shadow-lg:0 24px 60px rgba(0,0,0,0.6);
   --st-expired-bg:#2a1416; --st-expired-bd:#5b1f23; --st-expired:#fca5a5;
   --st-critical-bg:#2a1a0f; --st-critical-bd:#5b3315; --st-critical:#fdba74;
@@ -103,7 +103,38 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .setup-steps { text-align:left; font-size:12px; color:#9fd9d0; }
 
 /* ============================ APP SHELL ============================ */
-.app { max-width:1320px; margin:0 auto; padding:20px clamp(14px,3vw,30px) 60px; }
+.app { display:flex; align-items:flex-start; gap:0; min-height:100vh; }
+.sidebar { flex:0 0 238px; position:sticky; top:0; align-self:stretch; height:100vh; overflow-y:auto;
+  background:var(--surface-solid); border-right:1px solid var(--hair); padding:22px 14px; display:flex; flex-direction:column; gap:18px; z-index:30; }
+.sidebar .logo-lockup { padding:0 6px; }
+.side-cap { font-size:10px; font-weight:800; letter-spacing:1.4px; text-transform:uppercase; color:var(--ink-3); padding:2px 10px; }
+.side-foot { margin-top:auto; font-size:11.5px; line-height:1.9; padding:10px 8px 0; border-top:1px solid var(--hair); }
+.side-foot a { display:block; color:var(--ink-2); cursor:pointer; text-decoration:none; }
+.side-foot a:hover { color:var(--accent); }
+.mainpane { flex:1; min-width:0; max-width:1320px; margin:0 auto; padding:20px clamp(14px,3vw,30px) 60px; width:100%; }
+/* filter chips (facility) */
+.chips { display:flex; gap:7px; flex-wrap:wrap; }
+.chip { border:1px solid var(--hair); background:var(--surface-solid); color:var(--ink-2); font-size:12.5px; font-weight:700; padding:8px 14px; border-radius:999px; transition:.14s; }
+.chip:hover { border-color:var(--teal-300); color:var(--ink); }
+.chip.on { background:var(--accent); color:#fff; border-color:transparent; }
+/* entity card: progress bar + status badge */
+.tile.tile-entity { aspect-ratio:auto; min-height:190px; }
+.ent-badge { margin-left:auto; font-size:10px; font-weight:800; padding:4px 10px; border-radius:999px; white-space:nowrap; }
+.ent-badge.b-prog { background:var(--teal-50); color:var(--teal-700); }
+.ent-badge.b-ready { background:var(--st-good-bg); color:var(--st-good); }
+.ent-badge.b-act { background:var(--st-expired-bg); color:var(--st-expired); }
+.ent-prog { margin-top:10px; }
+.ent-prog-row { display:flex; justify-content:space-between; font-size:11px; font-weight:700; color:var(--ink-3); margin-bottom:5px; }
+.ent-prog-row b { color:var(--ink-2); }
+.ent-bar { height:7px; background:var(--hair); border-radius:999px; overflow:hidden; }
+.ent-bar i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--teal-500),var(--teal-700)); }
+@media(max-width:860px){
+  .app { flex-direction:column; }
+  .sidebar { flex:none; width:100%; height:auto; position:static; border-right:none; border-bottom:1px solid var(--hair);
+    flex-direction:row; align-items:center; gap:12px; padding:12px 14px; overflow-x:auto; }
+  .sidebar .tabs { flex-direction:row; gap:6px; }
+  .sidebar .side-cap, .sidebar .side-foot { display:none; }
+}
 .topbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; padding:14px 20px; margin-bottom:18px; position:sticky; top:10px; z-index:40; }
 .logo-lockup { display:flex; align-items:center; gap:11px; }
 .logo-lockup .mark { width:38px; height:38px; flex:0 0 auto; }
@@ -156,17 +187,17 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .kpi-health .h-desc{ font-size:12px; color:var(--ink-2); max-width:230px;}
 
 /* ---------- Tabs ---------- */
-.tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.tabs { display:flex; flex-direction:column; gap:5px; margin:0; }
 .tab {
-  display:flex; align-items:center; gap:9px; padding:12px 18px; border-radius:13px; font-size:14.5px; font-weight:700;
-  border:1px solid var(--hair); background:var(--surface-solid); color:var(--ink-2); transition:.15s;
+  display:flex; align-items:center; gap:10px; padding:11px 14px; border-radius:11px; font-size:14px; font-weight:700;
+  border:1px solid transparent; background:transparent; color:var(--ink-2); transition:.14s; width:100%; text-align:left;
 }
 .tab .lock { width:14px; height:14px; opacity:.7; }
-.tab .count { font-size:11px; font-weight:700; background:var(--hair); color:var(--ink-2); padding:2px 7px; border-radius:20px; }
-.tab:hover { transform:translateY(-1px); border-color:var(--teal-300); }
-.tab.active { background:linear-gradient(135deg,var(--teal-600),var(--teal-700)); color:#fff; border-color:transparent; box-shadow:0 8px 22px rgba(13,148,136,0.35); }
-.tab.active .count { background:rgba(255,255,255,0.25); color:#fff; }
-.tab.locked { opacity:.92; }
+.tab .count { margin-left:auto; font-size:11px; font-weight:800; background:var(--hair); color:var(--ink-2); padding:2px 8px; border-radius:20px; }
+.tab:hover { background:var(--teal-50); color:var(--ink); }
+.tab.active { background:var(--teal-50); color:var(--teal-700); border-color:transparent; }
+.tab.active .count { background:var(--teal-600); color:#fff; }
+.tab.locked { opacity:.75; }
 
 /* ---------- Toolbar (search/filter/sort/view) ---------- */
 .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:13px 16px; margin-bottom:16px; }

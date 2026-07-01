@@ -502,7 +502,7 @@
       '<button id="qClear" class="q-clear" title="Clear search"' + (state.search ? '' : ' style="display:none"') + '>×</button></div>' +
       '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "name") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
-      (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
+      (state.tab !== "provider" ? '<div class="chips" id="facChips">' + [["all", "All"], ["Castle Hills ER", "Castle Hills"], ["Frisco ER", "Frisco"]].map(function (o) { return '<button class="chip' + (state.facility === o[0] ? " on" : "") + '" data-f="' + esc(o[0]) + '">' + o[1] + '</button>'; }).join("") + '</div>' : '') +
       (state.tab === "provider" || state.tab === "staff" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
       '<div class="spacer" style="flex:1"></div>' +
       '<div class="seg" id="viewSeg">' +
@@ -513,7 +513,7 @@
     $("#qClear").onclick = () => { state.search = ""; $("#q").value = ""; $("#qClear").style.display = "none"; renderContent(); $("#q").focus(); };
     $("#sortF").onchange = e => { state.sort = e.target.value; renderContent(); };
     $("#catF").onchange = e => { state.category = e.target.value; renderContent(); };
-    if ($("#facF")) $("#facF").onchange = e => { state.facility = e.target.value; renderContent(); };
+    if ($("#facChips")) [...$("#facChips").querySelectorAll(".chip")].forEach(b => b.onclick = () => { state.facility = b.dataset.f; renderContent(); });
     if ($("#inact")) $("#inact").onchange = e => { state.showInactive = e.target.checked; render(); };
     [...$("#viewSeg").querySelectorAll("button")].forEach(b => b.onclick = () => {
       state.view = b.dataset.v;
@@ -802,16 +802,20 @@
 
   function entityTile(name, items, tab) {
     const gs = statsFor(items);
-    const isProv = tab === "provider";
+    const isProv = tab === "provider" || tab === "staff";
     const onFile = items.filter(i => i.isFile || i.centralProof).length;
-    const t = el("div", "tile is-folder s-" + worstKey(items) + (onFile ? "" : " nofiles"));
+    const pct = items.length ? Math.round(onFile / items.length * 100) : 0;
+    const t = el("div", "tile tile-entity is-folder s-" + worstKey(items) + (onFile ? "" : " nofiles"));
     const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
       : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
+    const badge = gs.expired ? ["action needed", "b-act"] : (pct === 100 ? ["ready", "b-ready"] : ["in progress", "b-prog"]);
     const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
     const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
-    t.innerHTML = '<span class="tile-rail"></span><div class="tile-top">' + icon + '</div>' +
+    t.innerHTML = '<span class="tile-rail"></span>' +
+      '<div class="tile-top">' + icon + '<span class="ent-badge ' + badge[1] + '">' + badge[0] + '</span></div>' +
       '<div class="tile-nm">' + esc(name) + test + '</div><div class="tile-meta">' + items.length + ' tracked items</div>' +
-      '<div class="tile-cov' + (onFile ? '' : ' none') + '">' + onFile + ' of ' + items.length + ' on file</div>' +
+      '<div class="ent-prog"><div class="ent-prog-row"><span>On file</span><span><b>' + onFile + '</b> / ' + items.length + '</span></div>' +
+      '<div class="ent-bar"><i style="width:' + pct + '%"></i></div></div>' +
       (pills ? '<div class="tile-pills">' + pills + '</div>' : "");
     t.onclick = () => navigate([name]);
     return t;

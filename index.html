@@ -10,11 +10,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#4338ca">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sentinel">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=cloud87">
+<link rel="stylesheet" href="styles.css?v=cloud88">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="sentinelGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f766e"/>
+      <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#4338ca"/>
     </linearGradient>
     <symbol id="logo-sentinel" viewBox="0 0 48 48">
       <path d="M24 3l16 6v11c0 10-7 18-16 22C15 38 8 30 8 20V9z" fill="url(#sentinelGrad)"/>
@@ -38,14 +38,19 @@
 
 <!-- ===================== APP ===================== -->
 <main class="app hidden" id="app">
-  <header class="topbar glass">
+  <aside class="sidebar">
     <div class="logo-lockup" id="homeLogo" title="Home — reset view" style="cursor:pointer">
       <svg class="mark"><use href="#logo-sentinel"/></svg>
       <div>
         <div class="name"><b>Sentinel</b></div>
-        <div class="tag">Compliance Command Center</div>
+        <div class="tag">Compliance</div>
       </div>
     </div>
+    <div class="side-cap">Compliance areas</div>
+    <nav class="tabs" id="tabs"></nav>
+  </aside>
+  <div class="mainpane">
+  <header class="topbar glass">
     <div class="spacer"></div>
     <button class="icon-btn" id="btnSearch" title="Global search (Ctrl/⌘ + K)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
@@ -80,7 +85,6 @@
 
   <div id="alertBanner"></div>
   <section class="kpi-grid" id="kpiGrid"></section>
-  <nav class="tabs" id="tabs"></nav>
   <div class="toolbar glass" id="toolbar"></div>
   <section class="content" id="content"><div class="sk-wrap"><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div><div class="sk-card"></div></div></section>
 
@@ -89,6 +93,7 @@
     <span id="genStamp"></span><br>
     Client-side access gate is a deterrent, not encryption — <a id="securityLink">read the security note</a>.<br>
     <div id="footLinks" style="margin-top:6px"></div>
+  </div>
   </div>
 </main>
 
@@ -101,8 +106,8 @@
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 <div class="toast" id="toast"></div>
 
-<script src="sha256.js?v=cloud87"></script>
-<script src="config.js?v=cloud87"></script>
+<script src="sha256.js?v=cloud88"></script>
+<script src="config.js?v=cloud88"></script>
 <!-- Microsoft sign-in gate: no roster data is loaded until the session is verified server-side. -->
 <script>
 (function () {
@@ -124,7 +129,7 @@
     return fetch("/api/data").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       if (!d || !d.items) { showSignIn(); return; }
       window.SENTINEL_SEED = d;
-      var sc = document.createElement("script"); sc.src = "app.js?v=cloud87"; document.body.appendChild(sc);
+      var sc = document.createElement("script"); sc.src = "app.js?v=cloud88"; document.body.appendChild(sc);
     });
   }).catch(showSignIn);
 })();
