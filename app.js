@@ -477,13 +477,22 @@
   function renderTabs() {
     let defs = [["provider", "Provider Compliance"], ["staff", "Staff Compliance"], ["facility", "Facility Compliance"], ["other", "Other Compliance"]];
     if (CURRENT_USER && CURRENT_USER.tabs) defs = defs.filter(d => CURRENT_USER.tabs.indexOf(d[0]) >= 0);
+    const NAV_ICONS = {
+      provider: '<path d="M4 21V7l8-4 8 4v14"/><path d="M9 21v-6h6v6"/>',
+      staff: '<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 014-4h6a4 4 0 014 4v2"/>',
+      facility: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+      other: '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/>',
+    };
+    const SHORT = { provider: "Providers", staff: "Staff", facility: "Facilities", other: "Other" };
     const t = $("#tabs"); t.innerHTML = "";
     defs.forEach(([k, label]) => {
       const cnt = tabItems(k).length;
       const locked = !UNLOCKED.has(k);
       const b = el("button", "tab" + (state.tab === k ? " active" : "") + (locked ? " locked" : ""));
-      b.innerHTML = (locked ? '<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>' : '') +
-        label + ' <span class="count">' + cnt + '</span>';
+      b.innerHTML = (locked
+          ? '<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>'
+          : '<svg class="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">' + (NAV_ICONS[k] || "") + '</svg>') +
+        (SHORT[k] || label) + ' <span class="count">' + cnt + '</span>';
       b.onclick = () => {
         if (!UNLOCKED.has(k)) { promptTabCode(k, () => { state.tab = k; state.status = ""; render(); }); return; }
         state.tab = k; state.status = ""; render();
@@ -502,7 +511,7 @@
       '<button id="qClear" class="q-clear" title="Clear search"' + (state.search ? '' : ' style="display:none"') + '>×</button></div>' +
       '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "name") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
-      (state.tab !== "provider" ? '<div class="chips" id="facChips">' + [["all", "All"], ["Castle Hills ER", "Castle Hills"], ["Frisco ER", "Frisco"]].map(function (o) { return '<button class="chip' + (state.facility === o[0] ? " on" : "") + '" data-f="' + esc(o[0]) + '">' + o[1] + '</button>'; }).join("") + '</div>' : '') +
+      (state.tab !== "provider" ? (function () { var its = tabItems(state.tab); var fc = function (fac) { var s = {}; its.forEach(function (i) { var f = i.scope === "staff" ? i.facility : i.entity; if (fac === "all" || f === fac) s[i.entityKey] = 1; }); return Object.keys(s).length; }; return '<div class="chips" id="facChips">' + [["all", "All"], ["Castle Hills ER", "Castle Hills"], ["Frisco ER", "Frisco"]].map(function (o) { return '<button class="chip' + (state.facility === o[0] ? " on" : "") + '" data-f="' + esc(o[0]) + '">' + o[1] + ' <span class="c">' + fc(o[0]) + '</span></button>'; }).join("") + '</div>'; })() : '') +
       (state.tab === "provider" || state.tab === "staff" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
       '<div class="spacer" style="flex:1"></div>' +
       '<div class="seg" id="viewSeg">' +
@@ -802,21 +811,25 @@
 
   function entityTile(name, items, tab) {
     const gs = statsFor(items);
-    const isProv = tab === "provider" || tab === "staff";
+    const isPeople = tab === "provider" || tab === "staff";
+    const total = items.length;
     const onFile = items.filter(i => i.isFile || i.centralProof).length;
-    const pct = items.length ? Math.round(onFile / items.length * 100) : 0;
-    const t = el("div", "tile tile-entity is-folder s-" + worstKey(items) + (onFile ? "" : " nofiles"));
-    const icon = isProv ? '<div class="tile-ic">' + esc(initials(name)) + '</div>'
-      : '<div class="tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + ICONS.building + '</svg></div>';
-    const badge = gs.expired ? ["action needed", "b-act"] : (pct === 100 ? ["ready", "b-ready"] : ["in progress", "b-prog"]);
-    const pills = ["expired", "critical", "due"].filter(k => gs[k]).map(k => '<span class="pill s-' + k + '">' + gs[k] + " " + k + '</span>').join("");
-    const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="pill s-good" style="background:#16a34a;color:#fff">TEST</span>' : "";
-    t.innerHTML = '<span class="tile-rail"></span>' +
-      '<div class="tile-top">' + icon + '<span class="ent-badge ' + badge[1] + '">' + badge[0] + '</span></div>' +
-      '<div class="tile-nm">' + esc(name) + test + '</div><div class="tile-meta">' + items.length + ' tracked items</div>' +
-      '<div class="ent-prog"><div class="ent-prog-row"><span>On file</span><span><b>' + onFile + '</b> / ' + items.length + '</span></div>' +
-      '<div class="ent-bar"><i style="width:' + pct + '%"></i></div></div>' +
-      (pills ? '<div class="tile-pills">' + pills + '</div>' : "");
+    const exp = gs.expired || 0, crit = gs.critical || 0, due = gs.due || 0;
+    const docsPct = total ? Math.round(onFile / total * 100) : 0;
+    const validPct = total ? Math.max(0, Math.round((total - exp - crit - due) / total * 100)) : 0;
+    const urgent = exp + crit;
+    const badge = exp ? ["action needed", "b-act"] : ((crit || due) ? ["in progress", "b-prog"] : ["ready", "b-ready"]);
+    const barc = p => p < 40 ? "f-amber" : (p < 80 ? "f-pri" : "f-green");
+    const icon = isPeople ? '<div class="c-ic">' + esc(initials(name)) + '</div>'
+      : '<div class="c-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></div>';
+    const test = items[0] && items[0].entityKey === "aijaz-imad" ? ' <span class="badge b-ready" style="margin-left:6px">TEST</span>' : "";
+    const t = el("div", "tile tile-entity");
+    t.innerHTML =
+      '<div class="c-top">' + icon + '<span class="badge ' + badge[1] + '">' + badge[0] + '</span></div>' +
+      '<div class="c-name">' + esc(name) + test + '</div>' +
+      '<div class="prow"><div class="prow-h"><span>Documents on file</span><b>' + docsPct + '%</b></div><div class="bar"><i class="' + barc(docsPct) + '" style="width:' + docsPct + '%"></i></div></div>' +
+      '<div class="prow"><div class="prow-h"><span>Currently valid</span><b>' + validPct + '%</b></div><div class="bar"><i class="' + barc(validPct) + '" style="width:' + validPct + '%"></i></div></div>' +
+      '<div class="c-foot"><span class="l">' + total + ' items · ' + onFile + ' on file</span>' + (urgent ? '<span class="w">⚠ ' + urgent + ' expiring</span>' : '') + '</div>';
     t.onclick = () => navigate([name]);
     return t;
   }
@@ -1140,6 +1153,7 @@
       sortDocs(scoped).forEach(it => grid.appendChild(docTile(it, !state.drill.length)));
       if (!scoped.length) grid.innerHTML = '<div class="hempty">No matches for “' + esc(state.search) + '”. Try fewer words.</div>';
     } else if (state.drill.length === 0) {
+      grid.classList.add("hgrid-wide");
       if (tab === "provider" && isAdmin()) {
         const add = el("div", "tile tile-add");
         add.innerHTML = '<div class="add-plus">＋</div><div class="tile-nm">Add provider</div><div class="tile-meta">Writes a new row to the master Excel roster</div>';
