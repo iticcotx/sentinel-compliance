@@ -55,9 +55,9 @@
   const USERS_KEY = "sentinel_users_v1";
   function allUsers() { let fromCfg = (CFG && CFG.users) || [], fromLs = []; try { fromLs = JSON.parse(localStorage.getItem(USERS_KEY) || "[]"); } catch (e) {} return fromCfg.concat(fromLs); }
   function resolveUser(id, pw) {
-    if (hash(id) === CFG.loginIdHash && hash(pw) === CFG.loginPwHash) return { label: "Administrator", role: "admin", tabs: ["provider", "facility", "other"], readonly: false };
+    if (hash(id) === CFG.loginIdHash && hash(pw) === CFG.loginPwHash) return { label: "Administrator", role: "admin", tabs: ["provider", "staff", "facility", "other"], readonly: false };
     const u = allUsers().find(u => u.idHash === hash(id) && u.pwHash === hash(pw));
-    if (u) return { label: u.label || id, role: "staff", tabs: (u.tabs && u.tabs.length) ? u.tabs : ["provider", "facility", "other"], readonly: !!u.readonly };
+    if (u) return { label: u.label || id, role: "staff", tabs: (u.tabs && u.tabs.length) ? u.tabs : ["provider", "staff", "facility", "other"], readonly: !!u.readonly };
     return null;
   }
   let DATA = [];                   // merged item list
@@ -149,7 +149,7 @@
   // ---------- scope helpers ----------
   function tabItems(tab) {
     let arr = DATA.filter(i => i.scope === tab);
-    if (tab === "provider") arr = arr.filter(i => state.showInactive ? true : (i.active !== false));
+    if (tab === "provider" || tab === "staff") arr = arr.filter(i => state.showInactive ? true : (i.active !== false));
     return arr;
   }
   // items only from tabs the user has unlocked (gates all global data tools)
@@ -159,7 +159,7 @@
   function applyFilters(arr) {
     const q = state.search.toLowerCase();
     return arr.filter(it => {
-      if (state.facility !== "all" && it.scope !== "provider" && it.entity !== state.facility) return false;
+      if (state.facility !== "all" && it.scope !== "provider") { var fv = it.scope === "staff" ? (it.facility || "") : it.entity; if (fv !== state.facility) return false; }
       if (state.category && it.category !== state.category) return false;
       if (state.status && computeStatus(it).key !== state.status) return false;
       const qv = state.quickView;
@@ -208,7 +208,7 @@
     if (window.SENTINEL_AUTH) {
       CFG = resolveConfig() || { configured: true, loginIdHash: "", loginPwHash: "", tabHashes: {} };
       const who = window.SENTINEL_AUTH.name || window.SENTINEL_AUTH.email || "Staff";
-      const tabs = (window.SENTINEL_AUTH.tabs && window.SENTINEL_AUTH.tabs.length) ? window.SENTINEL_AUTH.tabs : ["provider", "facility", "other"];
+      const tabs = (window.SENTINEL_AUTH.tabs && window.SENTINEL_AUTH.tabs.length) ? window.SENTINEL_AUTH.tabs : ["provider", "staff", "facility", "other"];
       CURRENT_USER = { label: who, role: window.SENTINEL_AUTH.admin ? "admin" : "staff", tabs: tabs, readonly: /[?&]readonly=1/.test(location.search) };
       READONLY = CURRENT_USER.readonly;
       UNLOCKED = new Set(tabs);  // only the tabs this Microsoft account is granted
@@ -338,7 +338,7 @@
   // tab access-code prompt
   function promptTabCode(tab, onOk) {
     const back = el("div", "auth-wrap"); back.style.background = "rgba(5,20,25,.7)";
-    const labels = { provider: "Provider Compliance", facility: "Facility Compliance", other: "Other Compliance" };
+    const labels = { provider: "Provider Compliance", staff: "Staff Compliance", facility: "Facility Compliance", other: "Other Compliance" };
     back.innerHTML = '<div class="auth-card" style="width:min(380px,100%)">' +
       '<div class="logo-lockup" style="justify-content:center"><svg class="mark"><use href="#logo-sentinel"/></svg></div>' +
       '<div class="auth-sub" style="margin-top:10px">Enter access code for<br><b style="color:#fff;font-size:15px">' + labels[tab] + '</b></div>' +
@@ -439,7 +439,7 @@
     health.style.cursor = "pointer";
     health.title = "Show all items (clear status filters)";
     health.innerHTML = '<div class="h-meta"><div class="k-label">Show all items</div>' +
-      '<div class="h-title">' + (state.tab === "provider" ? "Provider" : state.tab === "facility" ? "Facility" : "Operational") + ' readiness</div>' +
+      '<div class="h-title">' + (state.tab === "provider" ? "Provider" : state.tab === "staff" ? "Staff" : state.tab === "facility" ? "Facility" : "Operational") + ' readiness</div>' +
       '<div class="h-desc">' + s.total + ' tracked items · <b>' + s.expired + '</b> expired · <b>' + s.critical + '</b> critical</div></div>';
     health.onclick = () => { state.status = ""; state.quickView = ""; render(); };
     g.appendChild(health);
@@ -475,7 +475,7 @@
   }
 
   function renderTabs() {
-    let defs = [["provider", "Provider Compliance"], ["facility", "Facility Compliance"], ["other", "Other Compliance"]];
+    let defs = [["provider", "Provider Compliance"], ["staff", "Staff Compliance"], ["facility", "Facility Compliance"], ["other", "Other Compliance"]];
     if (CURRENT_USER && CURRENT_USER.tabs) defs = defs.filter(d => CURRENT_USER.tabs.indexOf(d[0]) >= 0);
     const t = $("#tabs"); t.innerHTML = "";
     defs.forEach(([k, label]) => {
@@ -503,7 +503,7 @@
       '<select class="ctrl" id="sortF" title="Sort by">' + sorts.map(([v, lab]) => '<option value="' + v + '"' + ((state.sort || "name") === v ? " selected" : "") + '>Sort: ' + lab + '</option>').join("") + '</select>' +
       '<select class="ctrl" id="catF"><option value="">All categories</option>' + cats.map(c => '<option' + (state.category === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select>' +
       (state.tab !== "provider" ? '<select class="ctrl" id="facF"><option value="all">All facilities</option><option' + (state.facility === "Castle Hills ER" ? " selected" : "") + '>Castle Hills ER</option><option' + (state.facility === "Frisco ER" ? " selected" : "") + '>Frisco ER</option></select>' : '') +
-      (state.tab === "provider" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
+      (state.tab === "provider" || state.tab === "staff" ? '<label class="toggle-pill"><input type="checkbox" id="inact"' + (state.showInactive ? " checked" : "") + '> Show inactive</label>' : '') +
       '<div class="spacer" style="flex:1"></div>' +
       '<div class="seg" id="viewSeg">' +
         ['list', 'timeline', 'calendar'].map(v => '<button data-v="' + v + '" class="' + (state.view === v ? "on" : "") + '">' + v.charAt(0).toUpperCase() + v.slice(1) + '</button>').join("") +
@@ -1101,7 +1101,7 @@
   function renderHierarchy(c, arr, tab) {
     if (!state.drill || state._drillTab !== tab) { state.drill = []; state._drillTab = tab; }
     const sg = subgroupsFor(tab);
-    const tabLabel = tab === "provider" ? "Providers" : tab === "facility" ? "Facilities" : "Operations";
+    const tabLabel = tab === "provider" ? "Providers" : tab === "staff" ? "Staff" : tab === "facility" ? "Facilities" : "Operations";
     const groups = {};
     arr.forEach(i => (groups[i.entity] = groups[i.entity] || []).push(i));
 
@@ -1999,7 +1999,7 @@
   function emailProviders() { svc("/api/email-providers", "✓ Reminder emails sent to providers.", "Email each provider their own expiring credentials now? Only providers with an email on file and items due within 90 days will be contacted."); }
 
   // ================= MANAGE ACCESS (Microsoft accounts + per-tab permissions) =================
-  const TAB_DEFS = [["provider", "Provider"], ["facility", "Facility"], ["other", "Other"]];
+  const TAB_DEFS = [["provider", "Provider"], ["staff", "Staff"], ["facility", "Facility"], ["other", "Other"]];
   function openAccessPanel() {
     openModal("Manage access", '<div class="item-sub">Loading…</div>');
     let me = "";
