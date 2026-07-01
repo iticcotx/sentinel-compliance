@@ -3,9 +3,9 @@
    Light theme by default · dark toggle · glassmorphism · WCAG-AA contrast
    ========================================================================== */
 :root {
-  /* Brand — indigo/violet (SaaS) */
-  --teal-900:#312e81; --teal-700:#4338ca; --teal-600:#4f46e5; --teal-500:#6366f1;
-  --teal-300:#a5b4fc; --teal-50:#eef2ff;
+  /* Brand */
+  --teal-900:#134e4a; --teal-700:#0f766e; --teal-600:#0d9488; --teal-500:#14b8a6;
+  --teal-300:#5eead4; --teal-50:#f0fdfa;
   --amber-600:#d97706; --amber-500:#f59e0b; --amber-200:#fde68a;
 
   /* Status (readable on white) */
@@ -18,7 +18,7 @@
   --st-pend:#475569;    --st-pend-bg:#f8fafc;    --st-pend-bd:#e2e8f0;
 
   /* Surfaces (light) */
-  --bg:#f6f6f8; --bg-grad1:#f6f6f8; --bg-grad2:#f6f6f8;
+  --bg:#eef2f6; --bg-grad1:#e3f2ef; --bg-grad2:#eef3f9;
   --surface:rgba(255,255,255,0.72); --surface-solid:#ffffff;
   --card-bd:rgba(255,255,255,0.9); --hair:#e6ebf1;
   --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
@@ -32,7 +32,7 @@
   --surface:rgba(20,30,40,0.66); --surface-solid:#111a22;
   --card-bd:rgba(255,255,255,0.07); --hair:#1e2b36;
   --ink:#e9eef3; --ink-2:#a4b3c0; --ink-3:#64758a;
-  --accent:var(--teal-500); --accent-ink:#ffffff;
+  --accent:var(--teal-500); --accent-ink:#04201d;
   --shadow:0 8px 30px rgba(0,0,0,0.4); --shadow-lg:0 24px 60px rgba(0,0,0,0.6);
   --st-expired-bg:#2a1416; --st-expired-bd:#5b1f23; --st-expired:#fca5a5;
   --st-critical-bg:#2a1a0f; --st-critical-bd:#5b3315; --st-critical:#fdba74;
@@ -117,13 +117,13 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .chip { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--hair); background:var(--surface-solid); color:var(--ink-2); font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:999px; transition:.14s; }
 .chip .c { font-size:11px; font-weight:700; color:var(--ink-3); }
 .chip:hover { border-color:var(--teal-300); color:var(--ink); }
-.chip.on { background:#f6f5ff; color:var(--accent); border-color:var(--accent); }
+.chip.on { background:var(--teal-50); color:var(--teal-700); border-color:var(--accent); }
 .chip.on .c { color:var(--accent); }
 /* wider grid for the entity home cards (roomy, ~3–4 per row) */
-.hgrid-wide { grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); align-items:start; }
-.hgrid-wide .tile-add { aspect-ratio:auto; min-height:0; padding:28px 18px; justify-content:center; }
+.hgrid.hgrid-wide { grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); align-items:stretch; gap:18px; }
+.hgrid.hgrid-wide .tile-add { aspect-ratio:auto; min-height:240px; padding:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
 /* SaaS entity card: icon + status badge + two labeled progress bars + footer meta */
-.tile.tile-entity { aspect-ratio:auto; min-height:0; display:block; padding:18px; border-radius:14px;
+.tile.tile-entity { aspect-ratio:auto; min-height:240px; display:flex; flex-direction:column; padding:20px; border-radius:14px;
   border:1px solid var(--hair); box-shadow:0 1px 2px rgba(20,20,50,.04); }
 .tile.tile-entity:hover { box-shadow:0 8px 24px rgba(20,20,50,.09); transform:translateY(-2px); border-color:var(--hair); }
 .tile-entity .c-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
@@ -141,7 +141,7 @@ body.cloud #xlsxLink, body.cloud #emailProvLink { display:none !important; }
 .tile-entity .bar { height:6px; background:#eef0f3; border-radius:999px; overflow:hidden; }
 .tile-entity .bar i { display:block; height:100%; border-radius:999px; }
 .tile-entity .f-amber { background:#f59e0b; } .tile-entity .f-pri { background:var(--accent); } .tile-entity .f-green { background:#22c55e; }
-.tile-entity .c-foot { display:flex; align-items:center; justify-content:space-between; margin-top:15px; padding-top:13px; border-top:1px solid var(--hair); font-size:11.5px; }
+.tile-entity .c-foot { display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:13px; border-top:1px solid var(--hair); font-size:11.5px; }
 .tile-entity .c-foot .l { color:var(--ink-3); }
 .tile-entity .c-foot .w { color:var(--st-expired); font-weight:600; }
 .tab .nav-ic { width:17px; height:17px; flex:0 0 auto; }

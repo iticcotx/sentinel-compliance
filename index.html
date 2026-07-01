@@ -10,11 +10,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4338ca">
+<meta name="theme-color" content="#0f766e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sentinel">
 <link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css?v=cloud89">
+<link rel="stylesheet" href="styles.css?v=cloud90">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <linearGradient id="sentinelGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#4338ca"/>
+      <stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f766e"/>
     </linearGradient>
     <symbol id="logo-sentinel" viewBox="0 0 48 48">
       <path d="M24 3l16 6v11c0 10-7 18-16 22C15 38 8 30 8 20V9z" fill="url(#sentinelGrad)"/>
@@ -106,8 +106,8 @@
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 <div class="toast" id="toast"></div>
 
-<script src="sha256.js?v=cloud89"></script>
-<script src="config.js?v=cloud89"></script>
+<script src="sha256.js?v=cloud90"></script>
+<script src="config.js?v=cloud90"></script>
 <!-- Microsoft sign-in gate: no roster data is loaded until the session is verified server-side. -->
 <script>
 (function () {
@@ -129,7 +129,7 @@
     return fetch("/api/data").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       if (!d || !d.items) { showSignIn(); return; }
       window.SENTINEL_SEED = d;
-      var sc = document.createElement("script"); sc.src = "app.js?v=cloud89"; document.body.appendChild(sc);
+      var sc = document.createElement("script"); sc.src = "app.js?v=cloud90"; document.body.appendChild(sc);
     });
   }).catch(showSignIn);
 })();
